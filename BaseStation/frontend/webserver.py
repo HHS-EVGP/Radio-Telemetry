@@ -12,32 +12,37 @@ import os
 app = Flask(__name__)
 
 ## Global variables ##
-dbpath = "BaseStation/EVGPTelemetry.sqlite"
+DBPATH = "BaseStation/EVGPTelemetry.sqlite"
+AUTHCODE = "hhsevgp" # Make this whatever you like
 authedusrs = []
-authcode = "hhsevgp" # Make this whatever you like
 
-laps = None
 laptime = None
-prev_laptimes = []
-
 racing = False
 racetime = None
 racetime_minutes = None
 
-# Restore pickled when_race_stared if applicable
-if os.path.exists("raceStart.pkl"):
-    with open("raceStart.pkl", "rb") as file:
-        try:
-            when_race_started = pickle.load(file)
 
-            # If we restored an actual value, set racing to true (we were racing)
-            if when_race_started is not None:
+# Restore pickled race data if applicable
+# laps, prev_laptimes, and when_race_started
+if os.path.exists("raceInfo.pkl"):
+    with open("raceInfo.pkl", "rb") as file:
+        try:
+            raceinfo = pickle.load(file)
+
+            if raceinfo is not None:
                 racing = True
+                laps = raceinfo['laps']
+                prev_laptimes = raceinfo['prev_laptimes']
+                when_race_started = raceinfo['when_race_started']
 
         except Exception as e:
-            print("Error unpickling when_race_started:", e)
+            print("Error unpickling race data:", e)
+            laps = None
+            prev_laptimes = []
             when_race_started = None
 else:
+    laps = None
+    prev_laptimes = []
     when_race_started = None
 
 # Set up a global connection to the socket
@@ -100,7 +105,7 @@ def getdata():
 
     return jsonify(
         systime=datetime.now().strftime("%H:%M:%S"),
-        timestamp=time.strftime("%H:%M:%S", time.localtime(float(clean_view(timestamp)))),
+        timestamp=time.strftime("%H:%M:%S", time.localtime(float(clean_view(timestamp)))) if timestamp is not None else None,
         throttle=clean_view(throttle),
         brake_pedal=clean_view(brake_pedal),
         motor_temp=clean_view(motor_temp),
@@ -128,10 +133,10 @@ def getdata():
 # Respond to an authentication attempt
 @app.route("/usrauth", methods=['POST'])
 def usrauth():
-    global authedusrs, authcode
+    global authedusrs, AUTHCODE
     authattempt = request.get_data(as_text=True)
 
-    if authattempt == authcode:
+    if authattempt == AUTHCODE:
         if request.remote_addr not in authedusrs:
             authedusrs.append(request.remote_addr)
         return ('', 200)
@@ -153,7 +158,7 @@ def usrupdate():
     if not command:
         return 'No variable update command', 400
 
-    con = sqlite3.connect(dbpath)
+    con = sqlite3.connect(DBPATH)
     cur = con.cursor()
 
     if command == 'lap+' and racing:
@@ -167,6 +172,16 @@ def usrupdate():
         if laptime is not None:
             prev_laptimes.append(laptime)
         laptime = 0
+        
+        # Update file dump
+        raceinfo = {
+            'laps': laps,
+            'prev_laptimes': prev_laptimes,
+            'when_race_started': when_race_started
+            }
+        
+        with open("raceInfo.pkl", "wb") as file:
+            pickle.dump(raceinfo, file)
 
         return ('', 200)
 
@@ -182,15 +197,28 @@ def usrupdate():
 
             # Remove the previous lap time from the list
             prev_laptimes.pop()
+            
+            # Update file dump
+            raceinfo = {
+                'laps': laps,
+                'prev_laptimes': prev_laptimes,
+                'when_race_started': when_race_started
+            }
+        
+            with open("raceInfo.pkl", "wb") as file:
+                pickle.dump(raceinfo, file)
 
         return ('', 200)
+
+    elif command == 'pauseunpause':
+        print("pauseunpause")
 
     elif command == 'togglerace':
         if racing:
             racing = False
 
             # Reset to default values
-            laps = 0
+            laps = None
             laptime = None
             prev_laptimes = []
             racetime = None
@@ -198,9 +226,8 @@ def usrupdate():
             when_race_started = None
 
             # Write file dump as None
-            with open("raceStart.pkl", "wb") as file:
-                pickle.dump(when_race_started, file)
-
+            with open("raceInfo.pkl", "wb") as file:
+                pickle.dump(None, file)
 
             return ('', 200)
 
@@ -217,9 +244,15 @@ def usrupdate():
             if when_race_started == None:
                 return ("No data! Unable to start race", 422)
 
-            # Write when_race_started to a file for backup
-            with open("raceStart.pkl", "wb") as file:
-                pickle.dump(when_race_started, file)
+            # Update file dump
+            raceinfo = {
+                'laps': laps,
+                'prev_laptimes': prev_laptimes,
+                'when_race_started': when_race_started
+                }
+            
+            with open("raceInfo.pkl", "wb") as file:
+                pickle.dump(raceinfo, file)
 
             racing = True
             laps = 0
