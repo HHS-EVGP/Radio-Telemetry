@@ -12,7 +12,7 @@ The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run r
 There are two ends of this system: the car's Pi, which records and transmits data, and the base station's Pi, which displays and analyzes the data.
 
 > **Virtual Environments:**
-From Python 3.3 onward, virtual environments are recommended when installing libraries with pip. This is to prevent conflicts with the system manager.
+From Python 3.3 onward, virtual environments are recommended when installing libraries with pip. This is to prevent conflicts with the system package manager.
 
 A virtual environment can be created with `python -m venv [name]`. In our code, we use the name `pyenv`.
 
