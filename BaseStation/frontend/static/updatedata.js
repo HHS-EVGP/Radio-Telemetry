@@ -114,6 +114,11 @@ function updateServerVariable(updatecode) {
   // Hide data warning if needed
   document.getElementById('nodatawarn').style.display = 'none';
 
+  // Redraw the charts to clear them on race start and stop
+  if (updatecode == 'togglerace') {
+    startCharts();
+  }
+
   fetch('/usrupdate', {
     method: 'POST',
     body: updatecode,
