@@ -192,20 +192,27 @@ function updateData() {
 
       // Start/stop race button and modal start/stop
       if (racing == true) {
-        document.getElementById('racing').textContent = "Stop Race";
+        document.getElementById('racing').textContent = "Stop";
         document.getElementById('startorstop').textContent = "stop the current";
+
+        // Show paused button
+        document.getElementById('paused').style.display = 'inline-block';
+
       }
       if (racing == false && paused == false) {
         document.getElementById('racing').textContent = "Start Race";
         document.getElementById('startorstop').textContent = "start a";
+
+        // Hide paused button
+        document.getElementById('paused').style.display = 'none';
       }
 
       // Pause/Unpause button
       if (paused == true) {
-        document.getElementById('paused').textContent = "Unpause Race";
+        document.getElementById('paused').textContent = "Resume";
       }
       else {
-        document.getElementById('paused').textContent = "Pause Race";
+        document.getElementById('paused').textContent = "Pause";
       }
 
       // GPS

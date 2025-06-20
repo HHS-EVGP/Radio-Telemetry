@@ -247,6 +247,8 @@ def usrupdate():
 
     elif command == 'togglerace':
         if racing:
+            if paused:
+                return ("Currently Paused!", 400)
             racing = False
 
             # Reset to default values
