@@ -87,25 +87,27 @@ insert_data_sql = f"""
     """
 with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
     ## Transmission Variables ##
-    radio._enable_receive_mode()
     #radio.set_sync_mode(0b10, False) # No carrier sense threshold
     #radio._set_filter_bandwidth(60)
 
     radio.set_base_frequency_hertz(433000000)
-    radio._set_modulation_format(cc1101.ModulationFormat.MSK)
     radio.set_symbol_rate_baud(5000)
     radio.set_sync_word(b'\x91\xd3')
     radio.set_preamble_length_bytes(4)
+    radio.disable_checksum()
+    radio.set_packet_length_bytes(2)
 
+    radio._set_modulation_format(cc1101.ModulationFormat.MSK)
+    radio._enable_receive_mode() # THIS MUST HAPPEN LAST
     print("Radio config:", radio)
     waitnum = 0
 
     # Lenths of seperate encoding types (See collector.py, line 345)
-    len64 = 8
-    len16 = 14
-    len32 = 28
+    len64 = 24
+    len16 = 24
+    #len32 = 0
 
-    expected_len = len64 + len16 + len32
+    expected_len = len64 + len16 #+ len32
 
     while True:
         # Receive a packet
@@ -117,7 +119,8 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
             waitnum += 1
             continue
 
-        packet = indump.payload()
+        packet = indump.payload
+        print("Raw Packet:", packet)
 
         if indump.checksum_valid == False:
             print("CRC Failed!!!")
@@ -129,15 +132,12 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
         try:
             # Unpack the 64 bit section
             in64 = struct.unpack("<" + "d" *len64, packet[:len64])
-            timestamp = in64[0]
+            timestamp, GPS_x, GPS_y = in64[0]
 
             # Unpack the 16 bit section
             in16 = struct.unpack("<" + "e", *len16, packet[len64:(len64+len16)])
-            throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4 = in16
-
-            # Unpackt the 32 bit section
-            in32 = struct.unpack("<" + "f" * len32, packet[len64+len16:])
-            amp_hours, voltage, current, speed, miles, GPS_x, GPS_y = in32
+            throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
+                amp_hours, voltage, current, speed, miles = in16
 
         except Exception as e:
             print(f"Error extracting data: {e}")

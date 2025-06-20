@@ -298,16 +298,16 @@ def collector():
 
 
         with cc1101.CC1101(spi_bus=0, spi_chip_select=1) as radio:
-            # Reset the device
-            #radio._reset()
 
             ## Transmission Variables ##
             radio.set_base_frequency_hertz(433000000)
-            radio._set_modulation_format(cc1101.ModulationFormat.MSK)
             radio.set_symbol_rate_baud(5000)
             radio.set_sync_word(b'\x91\xd3') # If you're a different school, make this (Or the frequency) different
             radio.set_preamble_length_bytes(4)
-            radio.set_output_power([0xC0, 0xC2]) # See datasheet: Table 39 and Section 24
+            radio.set_output_power([0xC0]) #, 0xC2]) # See datasheet: Table 39 and Section 24
+
+            radio.disable_checksum() # For Now
+            radio._set_modulation_format(cc1101.ModulationFormat.MSK)
 
             while True:
                 # Get Data
@@ -317,18 +317,18 @@ def collector():
                 GPS_x, GPS_y = UART_GPS()
 
                 # Designate wich variables will be encoded wich way
-                data64 = [timestamp] # 8 bytes
-                data16 = [throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4] # 14 bytes
-                data32 = [amp_hours, voltage, current, speed, miles, GPS_x, GPS_y] # 28 bytes
-                # 8+14+28 = 50 bytes, wich is under the 56 byte buffer limit of the cc1101*
-                # *Total limit is 64 bytes, but 8 are taken up by the pramble, sync word, and chekcsum
+                data64 = [timestamp, GPS_x, GPS_y] # 24
+                data16 = [throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
+                          amp_hours, voltage, current, speed, miles] # 24 bytes
+                ### 24 + 24 = 48 bytes, wich is under the 56 byte buffer limit of the cc1101*
+                ### *Total limit is 64 bytes, but 8 are taken up by the pramble, sync word, and chekcsum
 
                 print(data64)
                 print(data16)
-                print(data32)
 
                 # Combine all data together for logging
-                data = data64 + data16 + data32
+                data = [timestamp, throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
+                        amp_hours, voltage, current, speed, miles, GPS_x, GPS_y]
 
                 # Add data to the database:
                 cur.execute(insert_data_sql, data)
@@ -339,13 +339,14 @@ def collector():
                 try:
                     packet = b""
 
-                    # Encode time as 64 bit
+                    # Encode time and GPS as 64 bit
+                    packet += struct.pack("<" + "d" * len(data64), *data64)
 
-                    # Encode ADC Values as 16 bit
+                    # Encode ADC and CA Values as 16 bit
                     packet += struct.pack("<" + "e" * len(data16), *data16)
 
-                    # Encode CA and GPS as 32 bit
-                    packet += struct.pack("<" + "f" * len(data32), *data32)
+                    # Encode 32 bit data
+                    #packet += struct.pack("<" + "f" * len(data32), *data32)
 
                     # Send Data
                     GPIO.output(sendLED, 1)
