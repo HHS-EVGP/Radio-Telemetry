@@ -56,7 +56,7 @@ void loop() {
       cycleBuffer = "";
     }
   }
-  
+
   delay(75);
 }
 
