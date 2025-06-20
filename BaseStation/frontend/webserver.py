@@ -217,6 +217,8 @@ def usrupdate():
         return ('', 200)
 
     elif command == 'pauseunpause':
+        if not racing and not paused:
+            return ("Not racing!", 400)
 
         if paused == False:
             paused = True
