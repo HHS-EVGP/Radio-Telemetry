@@ -16,6 +16,7 @@ DBPATH = "BaseStation/EVGPTelemetry.sqlite"
 AUTHCODE = "hhsevgp" # Make this whatever you like
 authedusrs = []
 
+endAmphrs = None
 laptime = None
 racing = False
 racetime = None
@@ -67,7 +68,7 @@ def clean_view(var):
 # Page to serve a json with data
 @app.route("/getdata")
 def getdata():
-    global lastSocketDump, laps, laptime, racing, when_race_started, racetime, racetime_minutes, prev_laptimes, timestamp, paused_time
+    global lastSocketDump, laps, laptime, racing, when_race_started, racetime, racetime_minutes, prev_laptimes, timestamp, paused_time, endAmphrs
 
     # See if new data is available
     readable, _, _ = select.select([socketConn], [], [], 0)
@@ -86,6 +87,9 @@ def getdata():
     # Calculate current race time
     if racing and timestamp is not None:
         racetime = timestamp - when_race_started - paused_time
+
+        # Store for end amp hour calculation
+        rawRacetime = racetime
 
         # Calculate racetime_minutes if needed
         if racetime >= 60:
@@ -106,6 +110,12 @@ def getdata():
     if racing and timestamp is not None:
         laptime = timestamp - when_race_started - sum(prev_laptimes) - paused_time
 
+    # Estimate total amp hours that will be used in the race
+    if racing and not paused and amp_hours is not None:
+        # Formula derived from amp_hours/rawRacetime = endAmphrs/3600
+        # Assuming a 60 minute race
+        endAmphrs = amp_hours * (3600 / rawRacetime) if rawRacetime is not 0 else None
+
     return jsonify(
         systime=datetime.now().strftime("%H:%M:%S"),
         timestamp=time.strftime("%H:%M:%S", time.localtime(float(clean_view(timestamp)))) if timestamp is not None else None,
@@ -117,6 +127,7 @@ def getdata():
         batt_3=clean_view(batt_3),
         batt_4=clean_view(batt_4),
         amp_hours=clean_view(amp_hours),
+        endAmphrs=clean_view(endAmphrs),
         voltage=clean_view(voltage),
         current=clean_view(current),
         speed=clean_view(speed),

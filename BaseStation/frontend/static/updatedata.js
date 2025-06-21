@@ -177,6 +177,9 @@ function updateData() {
       document.getElementById('speed').textContent = data.speed ?? 'NNN';
       document.getElementById('miles').textContent = data.miles ?? 'NNN.NNN';
 
+      // Estimated end amp hours
+      document.getElementById('estendahs').textContent = data.endAmphrs ?? 'NNN.NNN';
+
       // Timimg
       document.getElementById('laps').textContent = data.laps ?? 'NN';
       document.getElementById('laptime').textContent = data.laptime ?? 'NNN'
