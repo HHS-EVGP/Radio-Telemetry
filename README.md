@@ -16,7 +16,7 @@ From Python 3.3 onward, virtual environments are recommended when installing lib
 
 A virtual environment can be created with `python -m venv [name]`. In our code, we use the name `pyenv`.
 
-**Once you have the virtual environment activated with `source [name]/bin/activate`, install the following:**
+**Once you have the virtual environment activated with `source [name]/bin/activate`, install the following with pip:**
 
 On the Car:
   - `adafruit-blinka`
