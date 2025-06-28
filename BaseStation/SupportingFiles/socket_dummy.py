@@ -50,6 +50,8 @@ sock, _ = server.accept()
 print("Client connected.")
 
 while True:
+    #input("Press Enter to send next data row")
+
     # Randomize socket data
     values = [time.time()] + [random.uniform(0.0, 100.0) for i in range(14)]
 
