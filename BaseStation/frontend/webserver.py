@@ -42,6 +42,11 @@ if os.path.exists("raceInfo.pkl"):
                 prev_laptimes = raceinfo['prev_laptimes']
                 when_race_started = raceinfo['when_race_started']
                 paused_time = raceinfo['paused_time']
+                when_paused = raceinfo['when_paused']
+
+                if when_paused is not None:
+                    paused = True
+                    racing = False
 
         except Exception as e:
             print("Error unpickling race data:", e)
@@ -50,6 +55,7 @@ if os.path.exists("raceInfo.pkl"):
             prev_laptimes = []
             when_race_started = None
             paused_time = 0
+            when_paused = None
 
 # Set up a global connection to the socket
 SOCKETPATH = "/tmp/telemSocket"
@@ -88,9 +94,6 @@ def getdata():
     if racing and timestamp is not None:
         racetime = timestamp - when_race_started - paused_time
 
-        # Store for end amp hour calculation
-        rawRacetime = racetime
-
         # Calculate racetime_minutes if needed
         if racetime >= 60:
             racetime_minutes = racetime // 60
@@ -111,10 +114,14 @@ def getdata():
         laptime = timestamp - when_race_started - sum(prev_laptimes) - paused_time
 
     # Estimate total amp hours that will be used in the race
-    if racing and not paused and amp_hours is not None:
+    if racing and amp_hours is not None and timestamp is not None \
+    or paused and amp_hours is not None and timestamp is not None:
+        rawRacetime = timestamp - when_race_started - paused_time
+
         # Formula derived from amp_hours/rawRacetime = endAmphrs/3600
         # Assuming a 60 minute race
-        endAmphrs = amp_hours * (3600 / rawRacetime) if rawRacetime is not 0 else None
+        if rawRacetime != 0: # Avoid devide by 0
+            endAmphrs = amp_hours * (3600 / rawRacetime)
 
     return jsonify(
         systime=datetime.now().strftime("%H:%M:%S"),
@@ -162,7 +169,7 @@ def usrauth():
 # Respond to an updated variable
 @app.route("/usrupdate", methods=['POST'])
 def usrupdate():
-    global authedusrs, laps, laptime, prev_laptimes, racing, when_race_started, racetime, racetime_minutes, paused, paused_time, when_paused
+    global authedusrs, laps, laptime, prev_laptimes, racing, when_race_started, racetime, racetime_minutes, paused, paused_time, when_paused, endAmphrs
 
     # Check if the user is authenticated
     if request.remote_addr not in authedusrs:
@@ -193,7 +200,8 @@ def usrupdate():
             'laps': laps,
             'prev_laptimes': prev_laptimes,
             'when_race_started': when_race_started,
-            'paused_time': paused_time
+            'paused_time': paused_time,
+            'when_paused': when_paused
             }
 
         with open("raceInfo.pkl", "wb") as file:
@@ -219,7 +227,8 @@ def usrupdate():
                 'laps': laps,
                 'prev_laptimes': prev_laptimes,
                 'when_race_started': when_race_started,
-                'paused_time': paused_time
+                'paused_time': paused_time,
+                'when_paused': when_paused
                 }
 
             with open("raceInfo.pkl", "wb") as file:
@@ -231,35 +240,35 @@ def usrupdate():
         if not racing and not paused:
             return ("Not racing!", 400)
 
-        if paused == False:
+        if not paused:
             paused = True
             racing = False
 
             when_paused = timestamp
 
         else:
+            paused = False
             racing = True
 
-            paused = False
             paused_time += timestamp - when_paused
+            when_paused = None
 
-            # Update file dump
-            raceinfo = {
-                'laps': laps,
-                'prev_laptimes': prev_laptimes,
-                'when_race_started': when_race_started,
-                'paused_time': paused_time
-                }
+        # Update file dump
+        raceinfo = {
+            'laps': laps,
+            'prev_laptimes': prev_laptimes,
+            'when_race_started': when_race_started,
+            'paused_time': paused_time,
+            'when_paused': when_paused
+            }
 
-            with open("raceInfo.pkl", "wb") as file:
-                pickle.dump(raceinfo, file)
+        with open("raceInfo.pkl", "wb") as file:
+            pickle.dump(raceinfo, file)
 
         return ('', 200)
 
     elif command == 'togglerace':
-        if racing:
-            if paused:
-                return ("Currently Paused!", 400)
+        if racing or paused:
             racing = False
 
             # Reset to default values
@@ -271,6 +280,7 @@ def usrupdate():
             when_race_started = None
             paused_time = 0
             paused = False
+            endAmphrs = None
 
             # Write file dump as None
             with open("raceInfo.pkl", "wb") as file:
@@ -296,7 +306,8 @@ def usrupdate():
                 'laps': laps,
                 'prev_laptimes': prev_laptimes,
                 'when_race_started': when_race_started,
-                'paused_time': paused_time
+                'paused_time': paused_time,
+                'when_paused': when_paused
                 }
 
             with open("raceInfo.pkl", "wb") as file:
