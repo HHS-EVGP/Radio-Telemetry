@@ -28,6 +28,7 @@ laps = None
 prev_laptimes = []
 when_race_started = None
 paused_time = 0
+when_paused = None
 
 # Restore pickled race data if applicable
 # laps, prev_laptimes, and when_race_started
@@ -208,7 +209,7 @@ def usrupdate():
         with open("raceInfo.pkl", "wb") as file:
             pickle.dump(raceinfo, file)
 
-        return ('', 200)
+        return ('Play Sound', 200)
 
     elif command == 'lap-' and racing:
 
