@@ -199,7 +199,7 @@ function updateData() {
       const paused = data.paused ?? false;
 
       // Start/stop race button and modal start/stop
-      if (racing == true) {
+      if (racing == true || paused == true) {
         document.getElementById('racing').textContent = "Stop";
         document.getElementById('startorstop').textContent = "stop the current";
 
