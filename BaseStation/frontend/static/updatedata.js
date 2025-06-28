@@ -192,6 +192,16 @@ function updateData() {
         document.getElementById('racetime_minutes').textContent = data.racetime_minutes;
       }
 
+      // Display of race controls or of authenticate button
+      if (data.authed == true) {
+        document.getElementById('lapcontrols').style.display = 'block';
+        document.getElementById('authlapcontrols').style.display = 'none';
+      }
+      else {
+        document.getElementById('lapcontrols').style.display = 'none';
+        document.getElementById('authlapcontrols').style.display = 'block';
+      }
+
       // Make data.racing a global variable
       window.racing = data.racing;
 

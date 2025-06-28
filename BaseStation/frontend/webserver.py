@@ -148,7 +148,8 @@ def getdata():
         racetime=racetime,
         racetime_minutes=racetime_minutes,
         racing=racing,
-        paused=paused
+        paused=paused,
+        authed=True if request.remote_addr in authedusrs else False
     )
 
 
