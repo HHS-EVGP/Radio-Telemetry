@@ -128,6 +128,13 @@ function updateServerVariable(updatecode) {
       if (response.status === 422) {
         document.getElementById('nodatawarn').style.display = 'block';
       }
+
+      // Check for sucessful lap+, and play sound if so
+      return response.text().then(text => {
+        if (text === 'Play Sound' && response.status === 200) {
+          playLapSound();
+        }
+      })
     });
 }
 
