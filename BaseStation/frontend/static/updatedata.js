@@ -19,7 +19,7 @@ function startCharts() {
         data: {
           labels: ['Throttle', 'Brake Pedal'],
           datasets: [{
-            data: [data.throttle ?? 0, data.brake_pedal ?? 0],
+            data: [data.throttle ?? 0, data.brakePedal ?? 0],
             backgroundColor: ['rgba(68, 192, 95, 0.75)', 'rgba(255, 0, 0, 0.75)'],
             borderColor: ['rgb(68, 192, 95)', 'rgb(255, 0, 0)'],
             borderWidth: 1
@@ -37,12 +37,12 @@ function startCharts() {
           scales: {
             x: {
               beginAtZero: true,
-              max: 1000, // Set the maximum value for the x-axis
+              max: 1000, // Max value for the x-axis
             },
             y: {
               ticks: {
                 font: {
-                  size: 16 // Adjust the font size for the labels
+                  size: 16 // Font size for labels
                 }
               }
             }
@@ -57,12 +57,12 @@ function startCharts() {
         data: {
           datasets: [{
             data: [{
-              x: data.GPS_x,
-              y: data.GPS_y
+              x: data.gpsX,
+              y: data.gpsY
             }],
             backgroundColor: 'rgb(54, 67, 126)',
-            borderColor: 'rgb(54, 67, 126)', // Set line color
-            fill: false, // Disable filling under the line
+            borderColor: 'rgb(54, 67, 126)', // Line color
+            fill: false, // No filling under the line
             tension: 1 // Line smoothness (0 for straight lines)
           }]
         },
@@ -95,12 +95,12 @@ function authenticateLapControls(code) {
 
     .then(response => {
       if (response.status == 200) {
-        document.getElementById('lapcontrols').style.display = 'block';
-        document.getElementById('authlapcontrols').style.display = 'none';
+        document.getElementById('lapControls').style.display = 'block';
+        document.getElementById('authLapControls').style.display = 'none';
       }
       else if (response.status == 401) {
-        new bootstrap.Modal(document.getElementById('lapauthmodal')).show();
-        document.getElementById('autherror').style.display = 'block';
+        new bootstrap.Modal(document.getElementById('lapAuthModal')).show();
+        document.getElementById('authError').style.display = 'block';
       }
       else {
         console.error('Unknown Auth Error:', response);
@@ -110,23 +110,23 @@ function authenticateLapControls(code) {
 
 
 // Update a variable on the server
-function updateServerVariable(updatecode) {
+function updateServerVariable(updateCode) {
   // Hide data warning if needed
-  document.getElementById('nodatawarn').style.display = 'none';
+  document.getElementById('noDataWarn').style.display = 'none';
 
   // Redraw the charts to clear them on race start and stop
-  if (updatecode == 'togglerace') {
+  if (updateCode == 'togglerace') {
     startCharts();
   }
 
   fetch('/usrupdate', {
     method: 'POST',
-    body: updatecode,
+    body: updateCode,
   })
     // If no data to start race with, display warning
     .then(response => {
       if (response.status === 422) {
-        document.getElementById('nodatawarn').style.display = 'block';
+        document.getElementById('noDataWarn').style.display = 'block';
       }
 
       // Check for sucessful lap+, and play sound if so
@@ -141,7 +141,7 @@ function updateServerVariable(updatecode) {
 // Play the lap sound
 function playLapSound() {
   if (window.racing ?? false == true) {
-    document.getElementById('lapsound').play();
+    document.getElementById('lapSound').play();
   }
 }
 
@@ -155,22 +155,22 @@ function updateData() {
     .then(data => {
 
       // Statuses
-      document.getElementById('systime').textContent = data.systime ?? 'NNN';
-      document.getElementById('timestamp').textContent = data.timestamp ?? 'NNN';
+      document.getElementById('sysTime').textContent = data.systime ?? 'NNN';
+      document.getElementById('timeStamp').textContent = data.timestamp ?? 'NNN';
 
       // Update the throttle and brake chart
-      window.throttleBrakeChart.data.datasets[0].data = [data.throttle ?? 0, data.brake_pedal ?? 0];
+      window.throttleBrakeChart.data.datasets[0].data = [data.throttle ?? 0, data.brakePedal ?? 0];
       window.throttleBrakeChart.update();
 
       // Temperatures
-      document.getElementById('motor_temp').textContent = data.motor_temp ?? 'NNN';
-      document.getElementById('batt_1').textContent = data.batt_1 ?? 'NNN';
-      document.getElementById('batt_2').textContent = data.batt_2 ?? 'NNN';
-      document.getElementById('batt_3').textContent = data.batt_3 ?? 'NNN';
-      document.getElementById('batt_4').textContent = data.batt_4 ?? 'NNN';
+      document.getElementById('motorTemp').textContent = data.motorTemp ?? 'NNN';
+      document.getElementById('batt1').textContent = data.batt1 ?? 'NNN';
+      document.getElementById('batt2').textContent = data.batt2 ?? 'NNN';
+      document.getElementById('batt3').textContent = data.batt3 ?? 'NNN';
+      document.getElementById('batt4').textContent = data.batt4 ?? 'NNN';
 
       // Check if any temperature is above 50 degrees and turn them red
-      ['motor_temp', 'batt_1', 'batt_2', 'batt_3', 'batt_4'].forEach(id => {
+      ['motorTemp', 'batt1', 'batt2', 'batt3', 'batt4'].forEach(id => {
         const element = document.getElementById(id);
         const value = parseFloat(data[id]) ?? 0;
         if (value > 50) {
@@ -181,35 +181,35 @@ function updateData() {
       });
 
       // General
-      document.getElementById('amp_hours').textContent = data.amp_hours ?? 'NNN.NNN';
+      document.getElementById('ampHours').textContent = data.ampHrs ?? 'NNN.NNN';
       document.getElementById('voltage').textContent = data.voltage ?? 'NNN';
       document.getElementById('current').textContent = data.current ?? 'NNN';
       document.getElementById('speed').textContent = data.speed ?? 'NNN';
       document.getElementById('miles').textContent = data.miles ?? 'NNN.NNN';
 
       // Estimated end amp hours
-      document.getElementById('estendahs').textContent = data.endAmphrs ?? 'NNN.NNN';
+      document.getElementById('estEndAhs').textContent = data.endAmpHrs ?? 'NNN.NNN';
 
       // Timimg
       document.getElementById('laps').textContent = data.laps ?? 'NN';
-      document.getElementById('laptime').textContent = data.laptime ?? 'NNN'
-      document.getElementById('lastlaptime').textContent = data.lastlaptime ?? 'NNN';
-      document.getElementById('fastestlaptime').textContent = data.fastestlaptime ?? 'NNN';
-      document.getElementById('racetime').textContent = data.racetime ?? 'NNN';
+      document.getElementById('lapTime').textContent = data.lapTime ?? 'NNN'
+      document.getElementById('lastLapTime').textContent = data.lastLapTime ?? 'NNN';
+      document.getElementById('fastestLapTime').textContent = data.fastestLapTime ?? 'NNN';
+      document.getElementById('raceTime').textContent = data.raceTime ?? 'NNN';
 
       // If racetime_minutes is not 0, display it
-      if (data.racetime_minutes != 0) {
-        document.getElementById('racetime_minutes').textContent = data.racetime_minutes;
+      if (data.raceTimeMinutes != 0) {
+        document.getElementById('raceTimeMinutes').textContent = data.raceTimeMinutes;
       }
 
       // Display of race controls or of authenticate button
       if (data.authed == true) {
-        document.getElementById('lapcontrols').style.display = 'block';
-        document.getElementById('authlapcontrols').style.display = 'none';
+        document.getElementById('lapControls').style.display = 'block';
+        document.getElementById('authLapControls').style.display = 'none';
       }
       else {
-        document.getElementById('lapcontrols').style.display = 'none';
-        document.getElementById('authlapcontrols').style.display = 'block';
+        document.getElementById('lapControls').style.display = 'none';
+        document.getElementById('authLapControls').style.display = 'block';
       }
 
       // Make data.racing a global variable
@@ -221,7 +221,7 @@ function updateData() {
       // Start/stop race button and modal start/stop
       if (racing == true || paused == true) {
         document.getElementById('racing').textContent = "Stop";
-        document.getElementById('startorstop').textContent = "stop the current";
+        document.getElementById('startOrStop').textContent = "stop the current";
 
         // Show paused button
         document.getElementById('paused').style.display = 'inline-block';
@@ -229,7 +229,7 @@ function updateData() {
       }
       if (racing == false && paused == false) {
         document.getElementById('racing').textContent = "Start Race";
-        document.getElementById('startorstop').textContent = "start a";
+        document.getElementById('startOrStop').textContent = "start a";
 
         // Hide paused button
         document.getElementById('paused').style.display = 'none';
@@ -244,81 +244,78 @@ function updateData() {
       }
 
       // GPS
-      document.getElementById('GPS_x').textContent = data.GPS_x ?? 'NNN';
-      document.getElementById('GPS_y').textContent = data.GPS_y ?? 'NNN';
+      document.getElementById('gpsX').textContent = data.gpsX ?? 'NNN';
+      document.getElementById('gpsY').textContent = data.gpsY ?? 'NNN';
 
       // Update scatter plot with new gps data
       window.gpsChart.data.datasets[0].data.push({
-        x: data.GPS_x,
-        y: data.GPS_y
+        x: data.gpsX,
+        y: data.gpsY
       });
 
       window.gpsChart.update();
 
       // Hide server warning since we got data
-      document.getElementById("serverwarn").style.display = "none";
+      document.getElementById("serverWarn").style.display = "none";
 
     })
     .catch(err => {
       // Show server warning
-      document.getElementById('serverwarn').style.display = "block";
+      document.getElementById('serverWarn').style.display = "block";
     });
 }
-setInterval(updateData, 250); // Update every 250ms
+setInterval(updateData, 250); // Every 250ms
 
 
 // Functions to count the clock
 function countLapTime() {
   if (window.racing == true) {
-    const laptimeElem = document.getElementById('laptime');
-    let laptime = parseFloat(laptimeElem.textContent) ?? 0;
-    laptime += 0.1;
-
-    // Clean view
-    laptime = laptime.toFixed(1);
-
-    laptimeElem.textContent = laptime;
+    const lapTimeElem = document.getElementById('lapTime');
+    let lapTime = parseFloat(lapTimeElem.textContent) ?? 0;
+    lapTime += 0.1;
+    lapTime = lapTime.toFixed(1);
+    lapTimeElem.textContent = lapTime;
   }
 }
 setInterval(countLapTime, 100);
 
 function countRaceTime() {
   if (window.racing == true) {
-    const racetimeElem = document.getElementById('racetime');
-    const racetime_minutesElem = document.getElementById('racetime_minutes')
+    const raceTimeElem = document.getElementById('raceTime');
+    const raceTimeMinutesElem = document.getElementById('raceTimeMinutes')
 
-    let racetime = parseFloat(racetimeElem.textContent) ?? 0;
-    let racetime_minutes = racetime_minutesElem.textContent;
+    let raceTime = parseFloat(raceTimeElem.textContent) ?? 0;
+    let raceTimeMinutes = raceTimeMinutesElem.textContent;
 
-    racetime += 0.1;
+    raceTime += 0.1;
 
     // If racetime_minutes is nothing, treat it as 0
-    if (racetime_minutes == "") {
-      racetime_minutes = 0;
+    if (raceTimeMinutes == "") {
+      raceTimeMinutes = 0;
     }
     else {
-      racetime_minutes = parseFloat(racetime_minutes);
+      raceTimeMinutes = parseFloat(raceTimeMinutes);
     }
 
     // If racetime >= 60, add it to minutes
-    if (racetime >= 60) {
-      let minutes2add = Math.floor(racetime / 60);
-      racetime_minutes += minutes2add;
-      racetime -= minutes2add * 60
+    if (raceTime >= 60) {
+      let minutes2add = Math.floor(raceTime / 60);
+      raceTimeMinutes += minutes2add;
+      raceTime -= minutes2add * 60
     }
 
     // Clean view
-    if (racetime < 10 && racetime_minutes != 0) {
-      racetime = '0' + racetime.toFixed(1);
+    if (raceTime < 10 && raceTimeMinutes != 0) {
+      raceTime = '0' + raceTime.toFixed(1);
     }
     else {
-      racetime = racetime.toFixed(1)
+      raceTime = raceTime.toFixed(1)
     }
 
     // Update values
-    racetimeElem.textContent = racetime;
-    if (racetime_minutes != 0) {
-      racetime_minutesElem.textContent = racetime_minutes + ":";
+    raceTimeElem.textContent = raceTime;
+    if (raceTimeMinutes != 0) {
+      raceTimeMinutesElem.textContent = raceTimeMinutes + ":";
     }
   }
 }
@@ -331,9 +328,8 @@ window.addEventListener('resize', startCharts);
 
 // Hide lap controls and warnings
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('lapcontrols').style.display = 'none';
-  document.getElementById('autherror').style.display = 'none';
-
-  document.getElementById('nodatawarn').style.display = 'none';
-  document.getElementById('serverwarn').style.display = "none";
+  document.getElementById('lapControls').style.display = 'none';
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('noDataWarn').style.display = 'none';
+  document.getElementById('serverWarn').style.display = "none";
 });

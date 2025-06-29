@@ -33,7 +33,7 @@ button:hover {
   transition: transform 0.2s ease-in-out;
 }
 
-#serverwarn {
+#serverWarn {
   position: fixed;
   top: 0;
   left: 0;

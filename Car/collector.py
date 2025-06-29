@@ -312,14 +312,14 @@ def collector():
             while True:
                 # Get Data
                 timestamp = time.time()
-                amp_hours, voltage, current, speed, miles = UART_CA()
-                throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4 = analogPull()
-                GPS_x, GPS_y = UART_GPS()
+                ampHrs, voltage, current, speed, miles = UART_CA()
+                throttle, brake, motorTemp, batt1, batt2, batt3, batt4 = analogPull()
+                gpsX, gpsY = UART_GPS()
 
                 # Designate wich variables will be encoded wich way
-                data64 = [timestamp, GPS_x, GPS_y] # 24
-                data16 = [throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
-                          amp_hours, voltage, current, speed, miles] # 24 bytes
+                data64 = [timestamp, gpsX, gpsY] # 24
+                data16 = [throttle, brake, motorTemp, batt1, batt2, batt3, batt4, \
+                          ampHrs, voltage, current, speed, miles] # 24 bytes
                 ### 24 + 24 = 48 bytes, wich is under the 56 byte buffer limit of the cc1101*
                 ### *Total limit is 64 bytes, but 8 are taken up by the pramble, sync word, and chekcsum
 
@@ -327,8 +327,8 @@ def collector():
                 print(data16)
 
                 # Combine all data together for logging
-                data = [timestamp, throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
-                        amp_hours, voltage, current, speed, miles, GPS_x, GPS_y]
+                data = [timestamp, throttle, brake, motorTemp, batt1, batt2, batt3, batt4, \
+                        ampHrs, voltage, current, speed, miles, gpsX, gpsY]
 
                 # Add data to the database:
                 cur.execute(insert_data_sql, data)

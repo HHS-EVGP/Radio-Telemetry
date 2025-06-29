@@ -13,14 +13,14 @@
   <!--Custom Stuff-->
   <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <script src="{{ url_for('static', filename='updatedata.js') }}"></script>
-  <audio id="lapsound" src="{{ url_for('static', filename='lapsound.mp3') }}"></audio>
+  <audio id="lapSound" src="{{ url_for('static', filename='lapsound.mp3') }}"></audio>
 
 </head>
 
 
 <body>
   <!--Server Error/Offline Warning-->
-  <div id="serverwarn">
+  <div id="serverWarn">
     <p style="margin-top: 0.5vh;">Server is Offline or has Internal Error!!!</p>
   </div>
 
@@ -32,8 +32,8 @@
         <div class="block halfblk d-flex flex-column justify-content-center">
 
           <p class="heading">Statuses</p>
-          <p>Server Time: <span class="data" id="systime"></span></p>
-          <p>Timestamp: <span class="data" id="timestamp"></span></p>
+          <p>Server Time: <span class="data" id="sysTime"></span></p>
+          <p>Timestamp: <span class="data" id="timeStamp"></span></p>
 
           <div>
             <canvas id="throttleBrakeChart" width="100%" height="150%"></canvas>
@@ -45,11 +45,11 @@
         <div class="block halfblk d-flex flex-column justify-content-center" style="margin-top: 1em;">
 
           <p class="heading">Temperatures</p>
-          <p>Motor: <span class="data" id="motor_temp"></span>°c</p>
-          <p>Battery 1: <span class="data" id="batt_1"></span>°c</p>
-          <p>Battery 2: <span class="data" id="batt_2"></span>°c</p>
-          <p>Battery 3: <span class="data" id="batt_3"></span>°c</p>
-          <p>Battery 4: <span class="data" id="batt_4"></span>°c</p>
+          <p>Motor: <span class="data" id="motorTemp"></span>°c</p>
+          <p>Battery 1: <span class="data" id="batt1"></span>°c</p>
+          <p>Battery 2: <span class="data" id="batt2"></span>°c</p>
+          <p>Battery 3: <span class="data" id="batt3"></span>°c</p>
+          <p>Battery 4: <span class="data" id="batt4"></span>°c</p>
 
         </div>
 
@@ -59,8 +59,8 @@
       <div class="block col-lg d-flex flex-column justify-content-center" style="text-align: center;">
 
         <div class="bordered">
-          <p class="bignum data" id="amp_hours"></p>
-          <p style="font-style: italic;">Est. End: <span class="data" id="estendahs"></span></p>
+          <p class="bignum data" id="ampHours"></p>
+          <p style="font-style: italic;">Est. End: <span class="data" id="estEndAhs"></span></p>
           <p>Amp Hours</p>
         </div>
 
@@ -80,7 +80,7 @@
 
         <div class="bordered">
           <p class="bignum data">
-            <span id="racetime_minutes"></span><span id="racetime"></span>
+            <span id="raceTimeMinutes"></span><span id="raceTime"></span>
           </p>
           <p>Race Time</p>
         </div>
@@ -93,8 +93,8 @@
       <div class="block col-lg d-flex flex-column justify-content-center">
 
         <p class="heading">GPS</p>
-        <p>X: <span class="data" id="GPS_x"></span></p>
-        <p>Y: <span class="data" id="GPS_y"></span></p>
+        <p>X: <span class="data" id="gpsX"></span></p>
+        <p>Y: <span class="data" id="gpsY"></span></p>
 
         <div>
           <!--This specific width and heigt give its column about the same height as the center column-->
@@ -102,26 +102,26 @@
         </div>
 
         <!--Button to authenticate lap controls-->
-        <span id="authlapcontrols">
-          <button data-bs-toggle="modal" data-bs-target="#lapauthmodal">
+        <span id="authLapControls">
+          <button data-bs-toggle="modal" data-bs-target="#lapAuthModal">
             Authenticate Lap Controls
           </button>
         </span>
 
         <!--Lap controls to be shown when acess code entered-->
-        <span id="lapcontrols">
+        <span id="lapControls">
           <button onclick="updateServerVariable('lap-')">Lap-</button>
           <button onclick="updateServerVariable('lap+')">Lap+</button>
           <button id="paused" onclick="updateServerVariable('pauseunpause')">Pause</button>
-          <button id="racing" data-bs-toggle="modal" data-bs-target="#startstopmodal">Start Race</button>
+          <button id="racing" data-bs-toggle="modal" data-bs-target="#startStopModal">Start Race</button>
         </span>
-        <p style="font-size: 1em; color: red;" id="nodatawarn">No data! Unable to start race.</p>
+        <p style="font-size: 1em; color: red;" id="noDataWarn">No data! Unable to start race.</p>
 
         <div class="bordered">
           <p>Laps: <span id="laps" class="data"></span></p>
-          <p>Lap Time: <span id="laptime" class="data"></span>s</p>
-          <p>Last Lap Time: <span id="lastlaptime" class="data"></span>s</p>
-          <p>Fastest Lap Time <span id="fastestlaptime" class="data"></span>s</p>
+          <p>Lap Time: <span id="lapTime" class="data"></span>s</p>
+          <p>Last Lap Time: <span id="lastLapTime" class="data"></span>s</p>
+          <p>Fastest Lap Time <span id="fastestLapTime" class="data"></span>s</p>
         </div>
 
       </div>
@@ -131,7 +131,7 @@
 
 
   <!--Modal to authenticate lapt controls-->
-  <div class="modal fade" id="lapauthmodal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="lapAuthModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content bg-dark text-white">
         <div class="modal-header border-secondary">
@@ -152,7 +152,7 @@
             <label for="accessCode">Enter Access Code:</label>
             <input type="text" id="accessCode" name="accessCode" required oninput="code = this.value"
               class="form-control bg-dark text-white border-secondary">
-            <div style="color: red;" id="autherror">Incorrect Access Code</div>
+            <div style="color: red;" id="authError">Incorrect Access Code</div>
 
         </div>
         <div class="modal-footer border-secondary">
@@ -165,7 +165,7 @@
   </div>
 
   <!--Modal to confirm race start/stop-->
-  <div class="modal fade" id="startstopmodal" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="startStopModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content bg-dark text-white">
         <div class="modal-header border-secondary">
@@ -175,7 +175,7 @@
         </div>
 
         <div class="modal-body text-start">
-          Are you sure you want to <span id='startorstop'></span> race?
+          Are you sure you want to <span id='startOrStop'></span> race?
         </div>
 
         <div class="modal-footer border-secondary">

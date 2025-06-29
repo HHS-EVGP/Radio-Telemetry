@@ -100,9 +100,9 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
     radio._set_modulation_format(cc1101.ModulationFormat.MSK)
     radio._enable_receive_mode() # THIS MUST HAPPEN LAST
     print("Radio config:", radio)
-    waitnum = 0
+    waitNum = 0
 
-    # Lenths of seperate encoding types (See collector.py, line 345)
+    # Lengths of separate encoding types (See collector.py, line 345)
     len64 = 24
     len16 = 24
     #len32 = 0
@@ -111,41 +111,41 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
 
     while True:
         # Receive a packet
-        # GIPO 24 goes High when a packet is avalable
-        indump = radio._wait_for_packet(timedelta(seconds=5), gdo0_gpio_line_name=b"GPIO24")
+        # GPIO 24 goes High when a packet is available
+        inDump = radio._wait_for_packet(timedelta(seconds=5), gdo0_gpio_line_name=b"GPIO24")
 
-        if indump == None:
-            print(f"Waited for packet {waitnum} time(s)")
-            waitnum += 1
+        if inDump is None:
+            print(f"Waited for packet {waitNum} time(s)")
+            waitNum += 1
             continue
 
-        packet = indump.payload
+        packet = inDump.payload
         print("Raw Packet:", packet)
 
-        if indump.checksum_valid == False:
+        if inDump.checksum_valid == False:
             print("CRC Failed!!!")
-            #continue
+            # continue
 
         if len(packet) != expected_len:
             print(f"Invalid packet size: {len(packet)} bytes!")
 
         try:
             # Unpack the 64 bit section
-            in64 = struct.unpack("<" + "d" *len64, packet[:len64])
-            timestamp, GPS_x, GPS_y = in64[0]
+            in_64 = struct.unpack("<" + "d" *len64, packet[:len64])
+            timestamp, gpsX, gpsY = in_64[0]
 
             # Unpack the 16 bit section
-            in16 = struct.unpack("<" + "e", *len16, packet[len64:(len64+len16)])
-            throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4, \
-                amp_hours, voltage, current, speed, miles = in16
+            in_16 = struct.unpack("<" + "e", *len16, packet[len64:(len64+len16)])
+            throttle, brake, motorTemp, batt1, batt2, batt3, batt4, \
+                ampHours, voltage, current, speed, miles = in_16
 
         except Exception as e:
             print(f"Error extracting data: {e}")
             continue
 
         values = [
-            timestamp, throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4,
-            amp_hours, voltage, current, speed, miles, GPS_x, GPS_y
+            timestamp, throttle, brake, motorTemp, batt1, batt2, batt3, batt4,
+            ampHours, voltage, current, speed, miles, gpsX, gpsY
         ]
 
         # If a value is nan, replace it with None
