@@ -145,10 +145,13 @@ function playLapSound() {
   }
 }
 
-// Update data
+// Fetch data
 function updateData() {
   fetch('/getdata')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error('Server offline');
+      return response.json();
+    })
     .then(data => {
 
       // Statuses
@@ -252,6 +255,13 @@ function updateData() {
 
       window.gpsChart.update();
 
+      // Hide server warning since we got data
+      document.getElementById("serverwarn").style.display = "none";
+
+    })
+    .catch(err => {
+      // Show server warning
+      document.getElementById('serverwarn').style.display = "block";
     });
 }
 setInterval(updateData, 250); // Update every 250ms
@@ -319,9 +329,11 @@ window.addEventListener('load', startCharts);
 window.addEventListener('resize', startCharts);
 
 
-// Hide lap controls by default
+// Hide lap controls and warnings
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('lapcontrols').style.display = 'none';
   document.getElementById('autherror').style.display = 'none';
+
   document.getElementById('nodatawarn').style.display = 'none';
+  document.getElementById('serverwarn').style.display = "none";
 });

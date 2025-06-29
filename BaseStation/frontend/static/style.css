@@ -33,6 +33,17 @@ button:hover {
   transition: transform 0.2s ease-in-out;
 }
 
+#serverwarn {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+
+  background: red;
+  text-align: center;
+  font-size: 0.75em;
+}
+
 #outer {
   height: 94vh;
 }
@@ -50,7 +61,6 @@ button:hover {
 
 .halfblk {
   height: calc(50% - 0.5em);
-
 }
 
 .bordered {
