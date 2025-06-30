@@ -66,9 +66,9 @@ print('Connected to socket:', SOCKETPATH)
 lastSocketDump = [None] * 15 # Number of data columns
 
 # Function to clean up data for display
-def cleanView(var):
+def cleanView(var, lenth):
     if var != None and var != 'Error':
-        var = format(var, ".3f")
+        var = format(var, f".{lenth}f")
     return var
 
 # Page to serve a json with data
@@ -125,26 +125,26 @@ def getData():
 
     return jsonify(
         systime=datetime.now().strftime("%H:%M:%S"),
-        timestamp=time.strftime("%H:%M:%S", time.localtime(float(cleanView(timestamp)))) if timestamp is not None else None,
-        throttle=cleanView(throttle),
-        brakePedal=cleanView(brakePedal),
-        motorTemp=cleanView(motorTemp),
-        batt1=cleanView(batt1),
-        batt2=cleanView(batt2),
-        batt3=cleanView(batt3),
-        batt4=cleanView(batt4),
-        ampHrs=cleanView(ampHrs),
-        endAmpHrs=cleanView(endAmpHrs),
-        voltage=cleanView(voltage),
-        current=cleanView(current),
-        speed=cleanView(speed),
-        miles=cleanView(miles),
-        gpsX=cleanView(gpsX),
-        gpsY=cleanView(gpsY),
+        timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp is not None else None,
+        throttle=cleanView(throttle, 3),
+        brakePedal=cleanView(brakePedal, 3),
+        motorTemp=cleanView(motorTemp, 3),
+        batt1=cleanView(batt1, 3),
+        batt2=cleanView(batt2, 3),
+        batt3=cleanView(batt3, 3),
+        batt4=cleanView(batt4, 3),
+        ampHrs=cleanView(ampHrs, 3),
+        endAmpHrs=cleanView(endAmpHrs, 3),
+        voltage=cleanView(voltage, 3),
+        current=cleanView(current, 3),
+        speed=cleanView(speed, 3),
+        miles=cleanView(miles, 3),
+        gpsX=cleanView(gpsX, 3),
+        gpsY=cleanView(gpsY, 3),
         laps=laps,
-        lapTime=format(lapTime, ".1f") if lapTime is not None else None,
-        lastLapTime=format(float(prevLapTimes[-1]), ".1f") if prevLapTimes else None,
-        fastestLapTime=format(float(min(prevLapTimes)), ".1f") if prevLapTimes else None,
+        lapTime=cleanView(lapTime, 1),
+        lastLapTime=cleanView(float(prevLapTimes[-1]), 1) if len(prevLapTimes) != 0 else None,
+        fastestLapTime=cleanView(float(min(prevLapTimes)), 1) if len(prevLapTimes) != 0 else None,
         raceTime=raceTime,
         raceTimeMinutes=raceTimeMinutes,
         racing=racing,
