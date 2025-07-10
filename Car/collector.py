@@ -300,14 +300,14 @@ def collector():
         with cc1101.CC1101(spi_bus=0, spi_chip_select=1) as radio:
 
             ## Transmission Variables ##
-            radio.set_base_frequency_hertz(433000000)
-            radio.set_symbol_rate_baud(5000)
+            radio.set_base_frequency_hertz(433000000) # Set to 915000000 once we get the right antenas
+            radio.set_symbol_rate_baud(6000)
             radio.set_sync_word(b'\x91\xd3') # If you're a different school, make this (Or the frequency) different
             radio.set_preamble_length_bytes(4)
             radio.set_output_power([0xC0]) #, 0xC2]) # See datasheet: Table 39 and Section 24
 
-            radio.disable_checksum() # For Now
-            radio._set_modulation_format(cc1101.ModulationFormat.MSK)
+            radio._set_modulation_format(cc1101.ModulationFormat.GFSK)
+            print(radio)
 
             while True:
                 # Get Data

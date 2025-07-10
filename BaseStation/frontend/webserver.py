@@ -302,6 +302,9 @@ def usrUpdate():
             if whenRaceStarted == None:
                 return ("No data! Unable to start race", 422)
 
+            # Initiate laps
+            laps = 0
+
             # Update file dump
             raceInfo = {
                 'laps': laps,
@@ -315,7 +318,6 @@ def usrUpdate():
                 pickle.dump(raceInfo, file)
 
             racing = True
-            laps = 0
 
             return ('', 200)
 
