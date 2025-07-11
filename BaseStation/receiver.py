@@ -135,7 +135,7 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
             timestamp, gpsX, gpsY = in_64[0]
 
             # Unpack the 16 bit section
-            in_16 = struct.unpack("<" + "e", *len16, packet[len64:(len64+len16)])
+            in_16 = struct.unpack("<" + "e" *len16, packet[len64:(len64+len16)])
             throttle, brake, motorTemp, batt1, batt2, batt3, batt4, \
                 ampHours, voltage, current, speed, miles = in_16
 
