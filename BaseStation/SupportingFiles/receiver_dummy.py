@@ -24,8 +24,8 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
     while True:
         # Receive a packet
         # GPIO 24 goes High when a packet is available
-        #inDump = radio._wait_for_packet(timedelta(seconds=5), gdo0_gpio_line_name=b"GPIO24")
-        inDump = radio._get_received_packet()
+        inDump = radio._wait_for_packet(timedelta(seconds=5), gdo0_gpio_line_name=b"GPIO24")
+        #inDump = radio._get_received_packet()
 
         if inDump is None:
             print(f"Waited for packet {waitNum} time(s)")
