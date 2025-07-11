@@ -79,7 +79,7 @@ for day in days:
     """)
 con.commit()
 
-insert_data_sql = f"""
+insert_data_sql = """
     INSERT INTO main (
         time, throttle, brake, Motor_temp, batt_1, batt_2, batt_3, batt_4,
         amp_hours, voltage, current, speed, miles, GPS_X, GPS_Y
