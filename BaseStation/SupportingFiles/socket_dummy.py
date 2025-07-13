@@ -1,3 +1,6 @@
+# This non critical file generates fake data to feed the webpage
+# for use in testing when no radio is avalable
+
 import socket
 import pickle
 import os
@@ -53,7 +56,7 @@ while True:
     #input("Press Enter to send next data row")
 
     # Randomize socket data
-    values = [time.time()] + [random.uniform(0.0, 100.0) for i in range(14)]
+    values = [time.time()] + [random.uniform(0.0, 1000.0) for i in range(14)]
 
     # send data
     data = pickle.dumps(values)

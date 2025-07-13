@@ -19,7 +19,10 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
     radio._set_modulation_format(cc1101.ModulationFormat.GFSK)
     radio._enable_receive_mode() # THIS MUST HAPPEN LAST
     print("Radio config:", radio)
+
     waitNum = 0
+    gotNum = 0
+    failedNum = 0
 
     while True:
         # Receive a packet
@@ -28,14 +31,18 @@ with cc1101.CC1101(spi_bus=0, spi_chip_select=0) as radio:
         #inDump = radio._get_received_packet()
 
         if inDump is None:
-            print(f"Waited for packet {waitNum} time(s)")
+            print(f"Waited for packet {waitNum} time(s). {gotNum} packets so far, {failedNum} CRC Fails.")
             waitNum += 1
             time.sleep(1)
             continue
 
         if inDump.checksum_valid == False:
             print("CRC Failed!!!")
+            failedNum += 1
             # continue
 
         packet = inDump.payload
-        print("Raw Packet:", packet)
+        gotNum += 1
+        print(f"Received: {packet}")
+
+        waitNum = 0

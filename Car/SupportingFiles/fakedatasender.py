@@ -1,8 +1,8 @@
 import struct
 import random
+import time
 
 import cc1101 #type: ignore
-import time
 
 
 with cc1101.CC1101() as radio:
@@ -17,7 +17,7 @@ with cc1101.CC1101() as radio:
     radio.set_packet_length_bytes(2)
 
     radio.disable_checksum()
-    radio._set_modulation_format(cc1101.ModulationFormat.MSK)
+    radio._set_modulation_format(cc1101.ModulationFormat.GFSK)
     print(radio)
 
     while True:

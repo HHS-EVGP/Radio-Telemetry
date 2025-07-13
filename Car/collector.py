@@ -5,7 +5,7 @@ def collector():
         import RPi.GPIO as GPIO  # type: ignore
         from adafruit_ads1x15.analog_in import AnalogIn # type: ignore
         import board # type: ignore
-        from adafruit_lsm6ds.lsm6dsox import LSM6DSOX # type: ignore
+        #from adafruit_lsm6ds.lsm6dsox import LSM6DSOX # type: ignore
         import adafruit_ads1x15.ads1115 as ADS # type: ignore
         import cc1101
         import smbus # type: ignore
@@ -21,11 +21,11 @@ def collector():
         import sys
         from gpiozero import Button #type: ignore
 
-        stop_btn = Button(19)  # Example GPIO pin, adjust as needed
         def stop_collector():
             print("Stop button pressed. Exiting collector.")
             sys.exit(0)
 
+        stop_btn = Button(19)  # Example GPIO pin, adjust as needed
         stop_btn.when_pressed = stop_collector
 
         bus = smbus.SMBus(1)
@@ -67,7 +67,7 @@ def collector():
         ''')
         days = cur.fetchall()
 
-        ## Create individual views for each existing day if they do not exist
+        # Create individual views for each existing day if they do not exist
         for day in days:
             cur.execute(f"""
             CREATE VIEW IF NOT EXISTS '{day[0]}'
@@ -76,10 +76,8 @@ def collector():
             """)
         con.commit()
 
-
         # Setup Thermistor Values
         R1 = 13000.0
-        logR2 = R2 = T = 0.0  # Initializing logR2, R2, and T as float values (defaulting to 0.0)
         c1 = 1.009249522e-03
         c2 = 2.378405444e-04
         c3 = 2.019202697e-07
@@ -113,8 +111,6 @@ def collector():
         def UART_CA():
             # Input from CA is: amp_hours|voltage|current|speed|miles
             try:
-                # data = read_from_uart(CA704_ADDR, 10)  # Adjust length for Cycle Analyst
-
                 if cycleAnalyst.in_waiting > 0:
                     line = cycleAnalyst.readline().decode('utf-8').strip()
                     if line:
@@ -124,14 +120,14 @@ def collector():
                         current = float(current)
                         speed = float(speed)
                         miles = float(miles)
+                        return [amp_hours, voltage, current, speed, miles]
 
-                        return amp_hours, voltage, current, speed, miles
                 else:
+                    return [float('nan')] * 5
 
-                    return float('nan'), float('nan'), float('nan'), float('nan'), float('nan')
             except Exception as e:
                 print(f"Error in SERIAL_CA function: {e}")
-                return float('nan'), float('nan'), float('nan'), float('nan'), float('nan')
+                return [float('nan')] * 5
 
 
         def set_system_time(gpstime, date):
@@ -193,7 +189,7 @@ def collector():
                     # If no GPS fix, return nan for all variables
                     if pos_status == 'V':
                         print("No GPS fix!!!")
-                        return float('nan'), float('nan')
+                        return [float('nan')] * 2
 
                     # Set System time to gps time if not done yet
                     if not On_GPS_time:
@@ -226,7 +222,7 @@ def collector():
                 print(f"Error in UART_GPS function: {e}")
 
             # didn't work out
-            return float('nan'), float('nan')
+            return [float('nan')] * 2
 
 
         def thermistor(idx):
@@ -317,7 +313,7 @@ def collector():
                 gpsX, gpsY = UART_GPS()
 
                 # Designate wich variables will be encoded wich way
-                data64 = [timestamp, gpsX, gpsY] # 24
+                data64 = [timestamp, gpsX, gpsY] # 24 bytes
                 data16 = [throttle, brake, motorTemp, batt1, batt2, batt3, batt4, \
                           ampHrs, voltage, current, speed, miles] # 24 bytes
                 ### 24 + 24 = 48 bytes, wich is under the 56 byte buffer limit of the cc1101*
@@ -357,7 +353,7 @@ def collector():
                 except Exception as e:
                     print("Error sending data:", e)
 
-    except Exception as e:
+    except Exception:
         sys.exit(1)
 
 if __name__ == "__main__":
