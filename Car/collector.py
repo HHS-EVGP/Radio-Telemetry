@@ -122,12 +122,11 @@ def collector():
                         miles = float(miles)
                         return [amp_hours, voltage, current, speed, miles]
 
-                else:
-                    return [float('nan')] * 5
-
             except Exception as e:
                 print(f"Error in SERIAL_CA function: {e}")
-                return [float('nan')] * 5
+
+            # Did not work for whatever reason
+            return [float('nan')] * 5
 
 
         def set_system_time(gpstime, date):
