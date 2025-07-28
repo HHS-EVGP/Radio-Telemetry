@@ -93,6 +93,7 @@ function startCharts() {
     });
 }
 
+
 // Authenticate lap controls
 function authenticateLapControls(code) {
   fetch("/usrauth", {
@@ -110,6 +111,7 @@ function authenticateLapControls(code) {
     }
   });
 }
+
 
 // Update a variable on the server
 function updateServerVariable(updateCode) {
@@ -139,6 +141,7 @@ function updateServerVariable(updateCode) {
     });
 }
 
+
 // Play the lap sound
 function playLapSound() {
   if (window.racing ?? false == true) {
@@ -146,8 +149,9 @@ function playLapSound() {
   }
 }
 
+
 // Fetch data
-function updateData() {
+function getData() {
   fetch("/getdata")
     .then((response) => {
       if (!response.ok) throw new Error("Server offline");
@@ -186,8 +190,7 @@ function updateData() {
       });
 
       // General
-      document.getElementById("ampHours").textContent =
-        data.ampHrs ?? "NNN.NNN";
+      document.getElementById("ampHours").textContent = data.ampHrs ?? "NNN.NNN";
       document.getElementById("voltage").textContent = data.voltage ?? "NNN";
       document.getElementById("current").textContent = data.current ?? "NNN";
       document.getElementById("speed").textContent = data.speed ?? "NNN";
@@ -200,10 +203,8 @@ function updateData() {
       // Timimg
       document.getElementById("laps").textContent = data.laps ?? "NN";
       document.getElementById("lapTime").textContent = data.lapTime ?? "NNN";
-      document.getElementById("lastLapTime").textContent =
-        data.lastLapTime ?? "NNN";
-      document.getElementById("fastestLapTime").textContent =
-        data.fastestLapTime ?? "NNN";
+      document.getElementById("lastLapTime").textContent = data.lastLapTime ?? "NNN";
+      document.getElementById("fastestLapTime").textContent = data.fastestLapTime ?? "NNN";
       document.getElementById("raceTime").textContent = data.raceTime ?? "NNN";
 
       // If racetime_minutes is not 0, display it
@@ -276,7 +277,8 @@ function updateData() {
       document.getElementById("serverWarn").style.display = "block";
     });
 }
-setInterval(updateData, 250); // Every 250ms
+setInterval(getData, 250); // Every 250ms
+
 
 // Functions to count the clock
 function countLapTime() {
@@ -289,6 +291,7 @@ function countLapTime() {
   }
 }
 setInterval(countLapTime, 100);
+
 
 function countRaceTime() {
   if (window.racing == true) {
@@ -330,9 +333,11 @@ function countRaceTime() {
 }
 setInterval(countRaceTime, 100);
 
+
 // Call startCharts on window load and resize
 window.addEventListener("load", startCharts);
 window.addEventListener("resize", startCharts);
+
 
 // Hide lap controls and warnings
 document.addEventListener("DOMContentLoaded", () => {
