@@ -29,7 +29,7 @@ def collector():
         stop_btn.when_pressed = stop_collector
 
         bus = smbus.SMBus(1)
-        On_GPS_time = False
+        on_GPS_time = False
 
         # Connect to the car's database
         con = sqlite3.connect('./CarTelemetry.sqlite')
@@ -182,6 +182,7 @@ def collector():
 
                 if data:
 
+                    # GPRMC Format: https://docs.novatel.com/OEM7/Content/Logs/GPRMC.htm
                     killall, gpstime, pos_status, lat, lat_dir, lon, lon_dir, speed, track_true, date, \
                         mag_var, var_dir, checksum = data.split(',')
 
@@ -191,7 +192,7 @@ def collector():
                         return [float('nan')] * 2
 
                     # Set System time to gps time if not done yet
-                    if not On_GPS_time:
+                    if not on_GPS_time:
                         set_system_time(gpstime, date)
 
                     # Convert latitude and longitude to decimal degrees

@@ -1,5 +1,4 @@
 .vscode/
-pyrightconfig.json
 pyenv/
 BaseStation/frontend/__pycache__
 raceInfo.pkl
