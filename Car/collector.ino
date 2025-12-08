@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
+#include <time.h>
 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LSM303_U.h>
@@ -49,13 +50,7 @@ typedef struct struct_message {
   float temperature;
 
   // GPS
-  uint8_t year;
-  uint8_t month;
-  uint8_t day;
-  uint8_t hour;
-  uint8_t minute;
-  uint8_t seconds;
-  uint16_t milliseconds;
+  float timestamp = NAN; // Initial value
   bool fix;
   float latitude;
   float longitude;
@@ -73,8 +68,7 @@ void fatalError(String message) {
   Serial.println(message);
 
   digitalWrite(errorLight, HIGH);
-  while (true)
-    ;
+  while (true);
 }
 
 void warning(String message) {
@@ -112,6 +106,7 @@ void getIMU() {
     carData.pitch = orientation.pitch;
   } else {
     warning("No Accelerometer Value!");
+    carData.rool = carData.pitch = NAN;
   }
 
   // Heading
@@ -120,16 +115,17 @@ void getIMU() {
     carData.heading = orientation.heading;
   } else {
     warning("No Magnometer value!");
+    carData.heading = NAN;
   }
 
   // Altitude
   bmp.getEvent(&bmp_event);
   if (bmp_event.pressure) {
-    /* Get ambient temperature in C */
+    // Get ambient temperature in C
     float temperature;
     bmp.getTemperature(&temperature);
 
-    /* Convert atmospheric pressure, SLP and temp to altitude    */
+    // Convert atmospheric pressure, SLP and temp to altitude
     float altitude;
     altitude = bmp.pressureToAltitude(seaLevelPressure, bmp_event.pressure, temperature);
 
@@ -137,18 +133,40 @@ void getIMU() {
     carData.altitude = altitude;
   } else {
     warning("No Altitude or Temperature value!");
+    carData.altitude = carData.temperature = NAN;
   }
+}
+
+float toUnixTimestamp(
+  int year, int month, int day,
+  int hour, int minute, int seconds,
+  int milliseconds) {
+
+  struct tm t = { 0 };
+
+  t.tm_year = year + 2000;  // adafruit gps gives year as 0-99
+  t.tm_mon = month - 1;     // mktime expects moths starting at 0
+  t.tm_mday = day;
+  t.tm_hour = hour;
+  t.tm_min = minute;
+  t.tm_sec = seconds;
+
+  // Set to UTC
+  setenv("TZ", "UTC0", 1);
+  tzset();
+
+  time_t unixSec = mktime(&t);
+
+  // Add milliseconds
+  return (float)unixSec + (milliseconds / 1000.0f);
 }
 
 void getGPS() {
   // Populate varibles
-  carData.year = GPS.year;
-  carData.month = GPS.month;
-  carData.day = GPS.day;
-  carData.hour = GPS.hour;
-  carData.minute = GPS.minute;
-  carData.seconds = GPS.seconds;
-  carData.milliseconds = GPS.milliseconds;
+  carData.timestamp = toUnixTimestamp(GPS.year, GPS.month, GPS.day,
+                                      GPS.hour, GPS.minute, GPS.seconds,
+                                      GPS.milliseconds);
+
   carData.fix = GPS.fix;
   carData.latitude = GPS.latitude;
   carData.longitude = GPS.longitude;
@@ -164,18 +182,12 @@ void initSD() {
 
 String packetToString(const struct_message &msg) {
   String s = "";
+  s += String(msg.timestamp);
   s += String(msg.rool) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
   s += String(msg.altitude) + ",";
   s += String(msg.temperature) + ",";
-  s += String(msg.year) + ",";
-  s += String(msg.month) + ",";
-  s += String(msg.day) + ",";
-  s += String(msg.hour) + ",";
-  s += String(msg.minute) + ",";
-  s += String(msg.seconds) + ",";
-  s += String(msg.milliseconds) + ",";
   s += (msg.fix ? "1" : "0");
   s += ",";
   s += String(msg.latitude) + ",";
@@ -255,7 +267,7 @@ void setup() {
 
   // Configure gps module
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);
 
   // Pin modes
   pinMode(errorLight, OUTPUT);
@@ -268,6 +280,29 @@ void setup() {
 }
 
 void loop() {
+  // Base the timimg off of a GPS and CA input
+  char gpsChar = GPS.read();
+  if (!GPS.newNMEAreceived()) {
+    return;
+  }
+  if (!GPS.parse(GPS.lastNMEA())) {
+    warning("GPS Parse Error!");
+
+    // Add 1/100 a second to the timestamp
+    if (carData.timestamp == NAN){
+      return; // This means we are still on our first data point
+    }
+    // This ensures every datapoint has a timestamp
+    carData.timestamp += 0.01;
+
+    // Set none values for each field
+    carData.fix = false;
+    carData.latitude = NAN;
+    carData.longitude = NAN;
+    carData.speed = NAN;
+    carData.angle = NAN;
+  }
+
   //Get data
   getIMU();
   getGPS();
@@ -279,10 +314,6 @@ void loop() {
 }
 
 /*
-FIGURE OUT WHAT TO USE FOR NO VALUE!!!
-Finish
-  GPS
-  IMU
 Still need to add
   CA
   analog pins
