@@ -41,7 +41,26 @@ uint8_t broadcastAddress[] = {0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60};
 
 // Packet structure
 typedef struct struct_message {
-  int a;
+  // IMU
+  float rool;
+  float pitch;
+  float heading;
+  float altitude;
+  float temperature;
+
+  // GPS
+  uint8_t year;
+  uint8_t month;
+  uint8_t day;
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t seconds;
+  uint16_t milliseconds;
+  bool fix;
+  float latitude;
+  float longitude;
+  float speed;
+  float angle;
 } struct_message;
 
 // Create a struct_message called carData
@@ -88,29 +107,25 @@ void getIMU() {
   sensors_event_t bmp_event;
   sensors_vec_t   orientation;
 
-  String imuString = "";
-
   // Pitch and rool
   accel.getEvent(&accel_event);
   if (dof.accelGetOrientation(&accel_event, &orientation))
   {
-    imuString = String(orientation.roll) + "," + String(orientation.pitch);
+    carData.rool = orientation.roll;
+    carData.pitch = orientation.pitch;
   }
   else {
     warning("No Accelerometer Value!");
-    imuString = ",";
   }
-
 
   // Heading
   mag.getEvent(&mag_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
   {
-    imuString += "," + String(orientation.heading);
+    carData.heading = orientation.heading;
   }
   else{
     warning("No Magnometer value!");
-    imuString +=",";
   }
 
   // Altitude
@@ -125,30 +140,28 @@ void getIMU() {
     float altitude;
     altitude = bmp.pressureToAltitude(seaLevelPressure, bmp_event.pressure, temperature);
 
-    imuString += "," + String(temperature) + "," + String(altitude);
+    carData.temperature = temperature;
+    carData.altitude = altitude;
   }
   else{
     warning("No Altitude or Temperature value!");
-    imuString += ",,";
   }
 }
 
 void getGPS() {
-  /* 
-  GPS.year()
-  GPS.month()
-  GPS.day()
-  GPS.hour()
-  GPS.minute()
-  GPS.seconds()
-  GPS.milliseconds()
-  
-  GPS.fix()
-  GPS.latitude()
-  GPS.longitude()
-  GPS.speed()
-  GPS.angle()
-  */
+  // Populate varibles
+  carData.year =          GPS.year;
+  carData.month =         GPS.month;
+  carData.day =           GPS.day;
+  carData.hour =          GPS.hour;
+  carData.minute =        GPS.minute;
+  carData.seconds =       GPS.seconds;
+  carData.milliseconds =  GPS.milliseconds;
+  carData.fix =           GPS.fix;
+  carData.latitude =      GPS.latitude;
+  carData.longitude =     GPS.longitude;
+  carData.speed =         GPS.speed;
+  carData.angle =         GPS.angle;
 }
 
 void initSD() {
@@ -157,7 +170,7 @@ void initSD() {
   }
 }
 
-void writeData(String dataString) {
+void writeData() {
   // open the file. note that only one file can be open at a time
   File dataFile = SD.open(fileName, FILE_WRITE);
 
@@ -165,7 +178,7 @@ void writeData(String dataString) {
   if (dataFile) {
     digitalWrite(writeLight, HIGH);
 
-    dataFile.println(dataString);
+    dataFile.println("carData"); // ACTION NEEDED!
     dataFile.close();
 
     digitalWrite(writeLight, LOW);
@@ -246,11 +259,12 @@ void loop() {
 
 
   // Transmit and write data
-  writeData("placeholder");
+  writeData();
   transmitData();
 }
 
 /*
+FIGURE OUT WHAT TO USE FOR NO VALUE!!!
 Finish
   GPS
   IMU
