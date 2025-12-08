@@ -15,10 +15,10 @@
 
 
 // Assign a unique ID to the IMU sensors
-Adafruit_10DOF                dof   = Adafruit_10DOF();
+Adafruit_10DOF dof = Adafruit_10DOF();
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
-Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
-Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
+Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(18001);
 
 // Sea Level Pressure
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
@@ -37,7 +37,7 @@ const int writeLight = 7;
 const int txLight = 8;
 
 // Receiver mac address
-uint8_t broadcastAddress[] = {0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60};
+uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
 
 // Packet structure
 typedef struct struct_message {
@@ -73,7 +73,8 @@ void fatalError(String message) {
   Serial.println(message);
 
   digitalWrite(errorLight, HIGH);
-  while (true);
+  while (true)
+    ;
 }
 
 void warning(String message) {
@@ -86,16 +87,13 @@ void warning(String message) {
 }
 
 void initIMU() {
-  if(!accel.begin())
-  {
+  if (!accel.begin()) {
     fatalError("IMU Accelerometer Initialization Error");
   }
-  if(!mag.begin())
-  {
+  if (!mag.begin()) {
     fatalError("IMU Magnometer Initialization Error");
   }
-  if(!bmp.begin())
-  {
+  if (!bmp.begin()) {
     fatalError("IMU Barometer Initialization Error");
   }
 }
@@ -105,33 +103,28 @@ void getIMU() {
   sensors_event_t accel_event;
   sensors_event_t mag_event;
   sensors_event_t bmp_event;
-  sensors_vec_t   orientation;
+  sensors_vec_t orientation;
 
   // Pitch and rool
   accel.getEvent(&accel_event);
-  if (dof.accelGetOrientation(&accel_event, &orientation))
-  {
+  if (dof.accelGetOrientation(&accel_event, &orientation)) {
     carData.rool = orientation.roll;
     carData.pitch = orientation.pitch;
-  }
-  else {
+  } else {
     warning("No Accelerometer Value!");
   }
 
   // Heading
   mag.getEvent(&mag_event);
-  if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
-  {
+  if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation)) {
     carData.heading = orientation.heading;
-  }
-  else{
+  } else {
     warning("No Magnometer value!");
   }
 
   // Altitude
   bmp.getEvent(&bmp_event);
-  if (bmp_event.pressure)
-  {
+  if (bmp_event.pressure) {
     /* Get ambient temperature in C */
     float temperature;
     bmp.getTemperature(&temperature);
@@ -142,32 +135,55 @@ void getIMU() {
 
     carData.temperature = temperature;
     carData.altitude = altitude;
-  }
-  else{
+  } else {
     warning("No Altitude or Temperature value!");
   }
 }
 
 void getGPS() {
   // Populate varibles
-  carData.year =          GPS.year;
-  carData.month =         GPS.month;
-  carData.day =           GPS.day;
-  carData.hour =          GPS.hour;
-  carData.minute =        GPS.minute;
-  carData.seconds =       GPS.seconds;
-  carData.milliseconds =  GPS.milliseconds;
-  carData.fix =           GPS.fix;
-  carData.latitude =      GPS.latitude;
-  carData.longitude =     GPS.longitude;
-  carData.speed =         GPS.speed;
-  carData.angle =         GPS.angle;
+  carData.year = GPS.year;
+  carData.month = GPS.month;
+  carData.day = GPS.day;
+  carData.hour = GPS.hour;
+  carData.minute = GPS.minute;
+  carData.seconds = GPS.seconds;
+  carData.milliseconds = GPS.milliseconds;
+  carData.fix = GPS.fix;
+  carData.latitude = GPS.latitude;
+  carData.longitude = GPS.longitude;
+  carData.speed = GPS.speed;
+  carData.angle = GPS.angle;
 }
 
 void initSD() {
   if (!SD.begin(chipSelect)) {
     fatalError("SD Initialization Error");
   }
+}
+
+String packetToString(const struct_message &msg) {
+  String s = "";
+  s += String(msg.rool) + ",";
+  s += String(msg.pitch) + ",";
+  s += String(msg.heading) + ",";
+  s += String(msg.altitude) + ",";
+  s += String(msg.temperature) + ",";
+  s += String(msg.year) + ",";
+  s += String(msg.month) + ",";
+  s += String(msg.day) + ",";
+  s += String(msg.hour) + ",";
+  s += String(msg.minute) + ",";
+  s += String(msg.seconds) + ",";
+  s += String(msg.milliseconds) + ",";
+  s += (msg.fix ? "1" : "0");
+  s += ",";
+  s += String(msg.latitude) + ",";
+  s += String(msg.longitude) + ",";
+  s += String(msg.speed) + ",";
+  s += String(msg.angle);
+
+  return s;
 }
 
 void writeData() {
@@ -178,7 +194,7 @@ void writeData() {
   if (dataFile) {
     digitalWrite(writeLight, HIGH);
 
-    dataFile.println("carData"); // ACTION NEEDED!
+    dataFile.println(packetToString(carData));
     dataFile.close();
 
     digitalWrite(writeLight, LOW);
@@ -191,12 +207,11 @@ void writeData() {
 
 void transmitData() {
   // Send it!
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &carData, sizeof(carData));
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&carData, sizeof(carData));
 
   if (result == ESP_OK) {
     Serial.println("Data sent with success");
-  }
-  else {
+  } else {
     warning("Error transmitting data");
   }
 }
@@ -230,7 +245,7 @@ void setup() {
   peerInfo.encrypt = false;
 
   // Add peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
     fatalError("Failed to add esp_now peer");
   }
 
