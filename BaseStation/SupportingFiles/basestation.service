@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=basestation
-ExecStart=/home/basestation/startup.sh
+ExecStart=/home/basestation/pyenv/bin/python /home/basestation/frontend/webserver.py
 Restart=always
 WorkingDirectory=/home/basestation
 
