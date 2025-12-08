@@ -50,11 +50,10 @@ typedef struct struct_message {
   float temperature;
 
   // GPS
-  float timestamp = NAN; // Initial value
+  float timestamp = NAN;  // Initial value
   bool fix;
   float latitude;
   float longitude;
-  float speed;
   float angle;
 } struct_message;
 
@@ -68,7 +67,8 @@ void fatalError(String message) {
   Serial.println(message);
 
   digitalWrite(errorLight, HIGH);
-  while (true);
+  while (true)
+    ;
 }
 
 void warning(String message) {
@@ -170,7 +170,6 @@ void getGPS() {
   carData.fix = GPS.fix;
   carData.latitude = GPS.latitude;
   carData.longitude = GPS.longitude;
-  carData.speed = GPS.speed;
   carData.angle = GPS.angle;
 }
 
@@ -192,7 +191,6 @@ String packetToString(const struct_message &msg) {
   s += ",";
   s += String(msg.latitude) + ",";
   s += String(msg.longitude) + ",";
-  s += String(msg.speed) + ",";
   s += String(msg.angle);
 
   return s;
@@ -289,17 +287,16 @@ void loop() {
     warning("GPS Parse Error!");
 
     // Add 1/100 a second to the timestamp
-    if (carData.timestamp == NAN){
-      return; // This means we are still on our first data point
+    if (carData.timestamp == NAN) {
+      return;  // This means we are still on our first data point
     }
     // This ensures every datapoint has a timestamp
     carData.timestamp += 0.01;
 
-    // Set none values for each field
+    // Set neutral values
     carData.fix = false;
     carData.latitude = NAN;
     carData.longitude = NAN;
-    carData.speed = NAN;
     carData.angle = NAN;
   }
 
