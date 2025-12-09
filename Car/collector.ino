@@ -28,17 +28,33 @@ float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 #define GPSSerial Serial1
 Adafruit_GPS GPS(&GPSSerial);
 
+// CA Serial
 HardwareSerial CA(2);
 String caBuffer;
 
-// fileName
+// Log file name
 const String fileName = "EVGPData.txt";
 
-// Pins TODO: ESP32 VALUES
-const int chipSelect = 10;
-const int errorLight = 6;
-const int writeLight = 7;
-const int txLight = 8;
+// Pins
+const int chipSelect = 29;
+
+const int errorLight = 10;
+const int writeLight = 11;
+const int txLight = 12;
+
+const int throttlePin = 3;
+const int brakePin = 4;
+const int motorPin = 5;
+const int batt1Pin = 6;
+const int batt2Pin = 7;
+const int batt3Pin = 8;
+const int batt4Pin = 9;
+
+// Thermistor values
+const float R1 = 13000.0;
+const float c1 = 1.009249522e-03;
+const float c2 = 2.378405444e-04;
+const float c3 = 2.019202697e-07;
 
 // Receiver mac address
 uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
@@ -65,6 +81,15 @@ typedef struct struct_message {
   float current;
   float speed;
   float miles;
+
+  // Analog
+  float throttle;
+  float brake;
+  float motorTemp;
+  float batt1;
+  float batt2;
+  float batt3;
+  float batt4;
 } struct_message;
 
 // Create a struct_message called carData
@@ -176,9 +201,9 @@ void getGPS() {
   if (!GPS.parse(GPS.lastNMEA())) {
     warning("GPS Parse Error!");
 
-    // Add 1/100 a second to the timestamp
-    if (carData.timestamp != NAN) { // Would be NAN if we're on our first data point
-      carData.timestamp += 0.01; // This ensures every datapoint has a timestamp
+    // Add 1/100 a second to the timestamp (Very low risk for conflict with the next data point)
+    if (carData.timestamp != NAN) {  // Would be NAN if we're on our first data point
+      carData.timestamp += 0.01;     // This ensures every datapoint has a timestamp
     }
 
     // Set neutral values
@@ -216,6 +241,28 @@ void getCA(String caBuffer) {
   carData.miles = caBuffer.substring(p4 + 1).toFloat();  // toFloat() ignores the \n
 }
 
+float thermistor(float value) {
+  value *= 1024 / 32768;
+  float R2 = R1 * (1023 / value - 1);
+  float T = 1.0f / (c1 + c2 * logf(R2) + c3 * powf(logf(R2), 3));
+  T -= 273.15;  // Convert to Celcius
+
+  return T;
+}
+
+void getAnalog() {
+  // Throttle and brake
+  carData.throttle = map(analogRead(throttlePin), 0, 4095, 0, 1000);
+  carData.brake = map(analogRead(brakePin), 0, 4095, 0, 1000);
+
+  // Temperatures
+  carData.motorTemp = thermistor(analogRead(motorPin));
+  carData.batt1 = thermistor(analogRead(batt1Pin));
+  carData.batt2 = thermistor(analogRead(batt2Pin));
+  carData.batt3 = thermistor(analogRead(batt3Pin));
+  carData.batt4 = thermistor(analogRead(batt4Pin));
+}
+
 void initSD() {
   if (!SD.begin(chipSelect)) {
     fatalError("SD Initialization Error");
@@ -230,11 +277,22 @@ String packetToString(const struct_message &msg) {
   s += String(msg.heading) + ",";
   s += String(msg.altitude) + ",";
   s += String(msg.ambientTemp) + ",";
-  s += (msg.fix ? "1" : "0");
-  s += ",";
+  s += (msg.fix ? "1" : "0") + String(",");
   s += String(msg.latitude) + ",";
   s += String(msg.longitude) + ",";
   s += String(msg.angle);
+  s += String(msg.ampHrs);
+  s += String(msg.voltage);
+  s += String(msg.current);
+  s += String(msg.speed);
+  s += String(msg.miles);
+  s += String(msg.throttle);
+  s += String(msg.brake);
+  s += String(msg.motorTemp);
+  s += String(msg.batt1);
+  s += String(msg.batt2);
+  s += String(msg.batt3);
+  s += String(msg.batt4);
 
   return s;
 }
@@ -318,6 +376,14 @@ void setup() {
   pinMode(writeLight, OUTPUT);
   pinMode(txLight, OUTPUT);
 
+  pinMode(throttlePin, INPUT);
+  pinMode(brakePin, INPUT);
+  pinMode(motorPin, INPUT);
+  pinMode(batt1Pin, INPUT);
+  pinMode(batt2Pin, INPUT);
+  pinMode(batt3Pin, INPUT);
+  pinMode(batt4Pin, INPUT);
+
   // Start IMU and SD connections
   initIMU();
   initSD();
@@ -337,14 +403,10 @@ void loop() {
   getIMU();
   getGPS();
   getCA(caBuffer);
+  getAnalog();
 
 
   // Transmit and write data
   writeData();
   transmitData();
 }
-
-/*
-Still need to add
-  analog pins
-*/
