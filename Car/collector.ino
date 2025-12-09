@@ -28,10 +28,13 @@ float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 #define GPSSerial Serial1
 Adafruit_GPS GPS(&GPSSerial);
 
+HardwareSerial CA(2);
+String caBuffer;
+
 // fileName
 const String fileName = "EVGPData.txt";
 
-// Pins
+// Pins TODO: ESP32 VALUES
 const int chipSelect = 10;
 const int errorLight = 6;
 const int writeLight = 7;
@@ -47,7 +50,7 @@ typedef struct struct_message {
   float pitch;
   float heading;
   float altitude;
-  float temperature;
+  float ambientTemp;
 
   // GPS
   float timestamp = NAN;  // Initial value
@@ -55,6 +58,13 @@ typedef struct struct_message {
   float latitude;
   float longitude;
   float angle;
+
+  // CA
+  float ampHrs;
+  float voltage;
+  float current;
+  float speed;
+  float miles;
 } struct_message;
 
 // Create a struct_message called carData
@@ -129,11 +139,11 @@ void getIMU() {
     float altitude;
     altitude = bmp.pressureToAltitude(seaLevelPressure, bmp_event.pressure, temperature);
 
-    carData.temperature = temperature;
+    carData.ambientTemp = temperature;
     carData.altitude = altitude;
   } else {
     warning("No Altitude or Temperature value!");
-    carData.altitude = carData.temperature = NAN;
+    carData.altitude = carData.ambientTemp = NAN;
   }
 }
 
@@ -162,6 +172,22 @@ float toUnixTimestamp(
 }
 
 void getGPS() {
+  // Attempt to parse gps message
+  if (!GPS.parse(GPS.lastNMEA())) {
+    warning("GPS Parse Error!");
+
+    // Add 1/100 a second to the timestamp
+    if (carData.timestamp != NAN) { // Would be NAN if we're on our first data point
+      carData.timestamp += 0.01; // This ensures every datapoint has a timestamp
+    }
+
+    // Set neutral values
+    carData.fix = false;
+    carData.latitude = NAN;
+    carData.longitude = NAN;
+    carData.angle = NAN;
+  }
+
   // Populate varibles
   carData.timestamp = toUnixTimestamp(GPS.year, GPS.month, GPS.day,
                                       GPS.hour, GPS.minute, GPS.seconds,
@@ -171,6 +197,23 @@ void getGPS() {
   carData.latitude = GPS.latitude;
   carData.longitude = GPS.longitude;
   carData.angle = GPS.angle;
+}
+
+void getCA(String caBuffer) {
+  // Input from CA is: ampHrs|voltage|current|speed|miles\n
+
+  // Find the index of each pipe
+  int p1 = caBuffer.indexOf('|');
+  int p2 = caBuffer.indexOf('|', p1 + 1);  // Look for pipe, starting at p1 + 1
+  int p3 = caBuffer.indexOf('|', p2 + 1);
+  int p4 = caBuffer.indexOf('|', p3 + 1);
+
+  // Define variables based on indexes
+  carData.ampHrs = caBuffer.substring(0, p1).toFloat();
+  carData.voltage = caBuffer.substring(p1 + 1, p2).toFloat();
+  carData.current = caBuffer.substring(p2 + 1, p3).toFloat();
+  carData.speed = caBuffer.substring(p3 + 1, p4).toFloat();
+  carData.miles = caBuffer.substring(p4 + 1).toFloat();  // toFloat() ignores the \n
 }
 
 void initSD() {
@@ -186,7 +229,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
   s += String(msg.altitude) + ",";
-  s += String(msg.temperature) + ",";
+  s += String(msg.ambientTemp) + ",";
   s += (msg.fix ? "1" : "0");
   s += ",";
   s += String(msg.latitude) + ",";
@@ -235,7 +278,7 @@ void setup() {
   // Start usb serial
   Serial.begin(115200);
 
-  // esp_now config
+  // Wifi mode for esp-now
   WiFi.mode(WIFI_STA);
 
   // Enter Long range mode
@@ -260,6 +303,9 @@ void setup() {
   }
 
 
+  // Start CA Serial
+  CA.begin(9600);
+
   // Start GPS serial
   GPS.begin(9600);
 
@@ -278,31 +324,19 @@ void setup() {
 }
 
 void loop() {
-  // Base the timimg off of a GPS and CA input
-  char gpsChar = GPS.read();
-  if (!GPS.newNMEAreceived()) {
+  // Read CA (GPS is read in the background)
+  char caChar = CA.read();
+  caBuffer += caChar;
+
+  // If we don't have a CA or a GPS message, wait
+  if (!GPS.newNMEAreceived() || caChar != '\n') {
     return;
-  }
-  if (!GPS.parse(GPS.lastNMEA())) {
-    warning("GPS Parse Error!");
-
-    // Add 1/100 a second to the timestamp
-    if (carData.timestamp == NAN) {
-      return;  // This means we are still on our first data point
-    }
-    // This ensures every datapoint has a timestamp
-    carData.timestamp += 0.01;
-
-    // Set neutral values
-    carData.fix = false;
-    carData.latitude = NAN;
-    carData.longitude = NAN;
-    carData.angle = NAN;
   }
 
   //Get data
   getIMU();
   getGPS();
+  getCA(caBuffer);
 
 
   // Transmit and write data
@@ -312,6 +346,5 @@ void loop() {
 
 /*
 Still need to add
-  CA
   analog pins
 */
