@@ -2,6 +2,7 @@
 #include <SD.h>
 #include <Wire.h>
 #include <time.h>
+#include <math.h>
 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LSM303_U.h>
@@ -69,10 +70,10 @@ typedef struct struct_message {
   float ambientTemp;
 
   // GPS
-  float timestamp = NAN;  // Initial value
+  double timestamp = NAN;  // Initial value
   bool fix;
-  float latitude;
-  float longitude;
+  double gpsX;
+  double gpsY;
   float angle;
 
   // CA
@@ -172,7 +173,7 @@ void getIMU() {
   }
 }
 
-float toUnixTimestamp(
+double toUnixTimestamp(
   int year, int month, int day,
   int hour, int minute, int seconds,
   int milliseconds) {
@@ -193,7 +194,11 @@ float toUnixTimestamp(
   time_t unixSec = mktime(&t);
 
   // Add milliseconds
-  return (float)unixSec + (milliseconds / 1000.0f);
+  return (double)unixSec + (milliseconds / 1000.0f);
+}
+
+double degToRad(double deg) {
+  return (deg / 180) * M_PI;
 }
 
 void getGPS() {
@@ -208,8 +213,8 @@ void getGPS() {
 
     // Set neutral values
     carData.fix = false;
-    carData.latitude = NAN;
-    carData.longitude = NAN;
+    carData.gpsX = NAN;
+    carData.gpsY = NAN;
     carData.angle = NAN;
   }
 
@@ -219,9 +224,19 @@ void getGPS() {
                                       GPS.milliseconds);
 
   carData.fix = GPS.fix;
-  carData.latitude = GPS.latitude;
-  carData.longitude = GPS.longitude;
   carData.angle = GPS.angle;
+
+  // Convert latitude and longitude to radians
+  double latRad = degToRad(GPS.latitudeDegrees);
+  double lonRad = degToRad(GPS.longitudeDegrees);
+
+  // Mercator project latitude and longitude into x and y
+  double x = 6378100 * lonRad;
+  double y = 6378100 * log(tan((M_PI / 4) * (latRad / 2))); // in c++, log is ln
+  // 6378100 meters is the IAU nominal "zero tide" eqatorial radius of the earth
+
+  carData.gpsX = x;
+  carData.gpsY = y;
 }
 
 void getCA(String caBuffer) {
@@ -278,8 +293,8 @@ String packetToString(const struct_message &msg) {
   s += String(msg.altitude) + ",";
   s += String(msg.ambientTemp) + ",";
   s += (msg.fix ? "true" : "false") + String(",");
-  s += String(msg.latitude) + ",";
-  s += String(msg.longitude) + ",";
+  s += String(msg.gpsX) + ",";
+  s += String(msg.gpsY) + ",";
   s += String(msg.angle);
   s += String(msg.ampHrs);
   s += String(msg.voltage);
