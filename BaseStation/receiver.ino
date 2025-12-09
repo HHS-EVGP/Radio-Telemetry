@@ -12,10 +12,10 @@ typedef struct struct_message {
   float ambientTemp;
 
   // GPS
-  float timestamp = NAN;  // Initial value
+  double timestamp = NAN;  // Initial value
   bool fix;
-  float latitude;
-  float longitude;
+  double gpsX;
+  double gpsY;
   float angle;
 
   // CA
@@ -38,6 +38,35 @@ typedef struct struct_message {
 // Create a struct_message called carData
 struct_message carData;
 
+// Helper to convert a packet to a string
+String packetToString(const struct_message &msg) {
+  String s = "";
+  s += String(msg.timestamp) + ",";
+  s += String(msg.rool) + ",";
+  s += String(msg.pitch) + ",";
+  s += String(msg.heading) + ",";
+  s += String(msg.altitude) + ",";
+  s += String(msg.ambientTemp) + ",";
+  s += (msg.fix ? "true" : "false") + String(",");
+  s += String(msg.gpsX) + ",";
+  s += String(msg.gpsY) + ",";
+  s += String(msg.angle) + ",";
+  s += String(msg.ampHrs) + ",";
+  s += String(msg.voltage) + ",";
+  s += String(msg.current) + ",";
+  s += String(msg.speed) + ",";
+  s += String(msg.miles) + ",";
+  s += String(msg.throttle) + ",";
+  s += String(msg.brake) + ",";
+  s += String(msg.motorTemp) + ",";
+  s += String(msg.batt1) + ",";
+  s += String(msg.batt2) + ",";
+  s += String(msg.batt3) + ",";
+  s += String(msg.batt4) + ",";
+
+  return s;
+}
+
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   // Copy the data over to the local carData struct
@@ -45,57 +74,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
   // Pass the data to the pi
   Serial.print("$DATA,");
-
-  // IMU
-  Serial.print(carData.rool);
-  Serial.print(",");
-  Serial.print(carData.pitch);
-  Serial.print(",");
-  Serial.print(carData.heading);
-  Serial.print(",");
-  Serial.print(carData.altitude);
-  Serial.print(",");
-  Serial.print(carData.ambientTemp);
-  Serial.print(",");
-
-  // GPS
-  Serial.print(carData.timestamp);
-  Serial.print(",");
-  Serial.print(carData.fix ? "true" : "false");
-  Serial.print(",");
-  Serial.print(carData.latitude);
-  Serial.print(",");
-  Serial.print(carData.longitude);
-  Serial.print(",");
-  Serial.print(carData.angle);
-  Serial.print(",");
-
-  // CA
-  Serial.print(carData.ampHrs);
-  Serial.print(",");
-  Serial.print(carData.voltage);
-  Serial.print(",");
-  Serial.print(carData.current);
-  Serial.print(",");
-  Serial.print(carData.speed);
-  Serial.print(",");
-  Serial.print(carData.miles);
-  Serial.print(",");
-
-  // Analog
-  Serial.print(carData.throttle);
-  Serial.print(",");
-  Serial.print(carData.brake);
-  Serial.print(",");
-  Serial.print(carData.motorTemp);
-  Serial.print(",");
-  Serial.print(carData.batt1);
-  Serial.print(",");
-  Serial.print(carData.batt2);
-  Serial.print(",");
-  Serial.print(carData.batt3);
-  Serial.print(",");
-  Serial.println(carData.batt4);
+  Serial.println(packetToString(carData));
 }
 
 void setup() {

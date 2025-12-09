@@ -286,7 +286,7 @@ void initSD() {
 
 String packetToString(const struct_message &msg) {
   String s = "";
-  s += String(msg.timestamp);
+  s += String(msg.timestamp) + ",";
   s += String(msg.rool) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
@@ -295,19 +295,19 @@ String packetToString(const struct_message &msg) {
   s += (msg.fix ? "true" : "false") + String(",");
   s += String(msg.gpsX) + ",";
   s += String(msg.gpsY) + ",";
-  s += String(msg.angle);
-  s += String(msg.ampHrs);
-  s += String(msg.voltage);
-  s += String(msg.current);
-  s += String(msg.speed);
-  s += String(msg.miles);
-  s += String(msg.throttle);
-  s += String(msg.brake);
-  s += String(msg.motorTemp);
-  s += String(msg.batt1);
-  s += String(msg.batt2);
-  s += String(msg.batt3);
-  s += String(msg.batt4);
+  s += String(msg.angle) + ",";
+  s += String(msg.ampHrs) + ",";
+  s += String(msg.voltage + ",");
+  s += String(msg.current) + ",";
+  s += String(msg.speed) + ",";
+  s += String(msg.miles) + ",";
+  s += String(msg.throttle) + ",";
+  s += String(msg.brake) + ",";
+  s += String(msg.motorTemp) + ",";
+  s += String(msg.batt1) + ",";
+  s += String(msg.batt2) + ",";
+  s += String(msg.batt3) + ",";
+  s += String(msg.batt4) + ",";
 
   return s;
 }
