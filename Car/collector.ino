@@ -277,7 +277,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.heading) + ",";
   s += String(msg.altitude) + ",";
   s += String(msg.ambientTemp) + ",";
-  s += (msg.fix ? "1" : "0") + String(",");
+  s += (msg.fix ? "true" : "false") + String(",");
   s += String(msg.latitude) + ",";
   s += String(msg.longitude) + ",";
   s += String(msg.angle);
