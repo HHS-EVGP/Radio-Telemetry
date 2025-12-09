@@ -62,6 +62,8 @@ uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
 
 // Packet structure
 typedef struct struct_message {
+  double timestamp = NAN;  // Initial value
+  
   // IMU
   float rool;
   float pitch;
@@ -70,7 +72,6 @@ typedef struct struct_message {
   float ambientTemp;
 
   // GPS
-  double timestamp = NAN;  // Initial value
   bool fix;
   double gpsX;
   double gpsY;

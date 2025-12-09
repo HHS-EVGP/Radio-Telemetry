@@ -4,6 +4,8 @@
 
 // Packet structure
 typedef struct struct_message {
+  double timestamp = NAN;  // Initial value
+  
   // IMU
   float rool;
   float pitch;
@@ -12,7 +14,6 @@ typedef struct struct_message {
   float ambientTemp;
 
   // GPS
-  double timestamp = NAN;  // Initial value
   bool fix;
   double gpsX;
   double gpsY;
