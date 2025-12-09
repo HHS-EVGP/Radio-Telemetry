@@ -40,7 +40,7 @@ const int chipSelect = 29;
 
 const int errorLight = 10;
 const int writeLight = 11;
-const int txLight = 12;
+const int radioLight = 12;
 
 const int throttlePin = 3;
 const int brakePin = 4;
@@ -318,7 +318,9 @@ void writeData() {
 
 void transmitData() {
   // Send it!
+  digitalWrite(radioLight, HIGH);
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&carData, sizeof(carData));
+  digitalWrite(radioLight, LOW);
 
   if (result == ESP_OK) {
     Serial.println("Data sent with success");
@@ -374,7 +376,7 @@ void setup() {
   // Pin modes
   pinMode(errorLight, OUTPUT);
   pinMode(writeLight, OUTPUT);
-  pinMode(txLight, OUTPUT);
+  pinMode(radioLight, OUTPUT);
 
   pinMode(throttlePin, INPUT);
   pinMode(brakePin, INPUT);
