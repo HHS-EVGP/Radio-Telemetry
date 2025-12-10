@@ -15,7 +15,6 @@ typedef struct struct_message {
 
   // GPS
   bool fix;
-  float angle;
   double gpsX;
   double gpsY;
 
@@ -49,7 +48,6 @@ String packetToString(const struct_message &msg) {
   s += String(msg.speed) + ",";
   s += String(msg.miles) + ",";
   s += (msg.fix ? "True" : "False") + String(",");
-  s += String(msg.angle) + ",";
   s += String(msg.gpsX) + ",";
   s += String(msg.gpsY) + ",";
   s += String(msg.throttle) + ",";

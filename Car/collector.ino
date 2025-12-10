@@ -75,7 +75,6 @@ typedef struct struct_message {
   bool fix;
   double gpsX;
   double gpsY;
-  float angle;
 
   // Analog
   float throttle;
@@ -216,7 +215,6 @@ void getGPS() {
     carData.fix = false;
     carData.gpsX = NAN;
     carData.gpsY = NAN;
-    carData.angle = NAN;
   }
 
   // Populate varibles
@@ -225,7 +223,6 @@ void getGPS() {
                                       GPS.milliseconds);
 
   carData.fix = GPS.fix;
-  carData.angle = GPS.angle;
 
   // Convert latitude and longitude to radians
   double latRad = degToRad(GPS.latitudeDegrees);
@@ -295,7 +292,6 @@ String packetToString(const struct_message &msg) {
   s += String(msg.speed) + ",";
   s += String(msg.miles) + ",";
   s += (msg.fix ? "True" : "False") + String(",");
-  s += String(msg.angle) + ",";
   s += String(msg.gpsX) + ",";
   s += String(msg.gpsY) + ",";
   s += String(msg.throttle) + ",";

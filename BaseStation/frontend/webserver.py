@@ -15,7 +15,7 @@ app = Flask(__name__)
 DBPATH = "BaseStation/EVGPTelemetry.sqlite"
 AUTHCODE = "hhsevgp" # Make this whatever you like
 authedUsrs = []
-data = [None] * 22 # Number of data points
+data = [None] * 21 # Number of data points
 
 endAmpHrs = None
 lapTime = None
@@ -77,7 +77,6 @@ def storeData():
         speed REAL,
         miles REAL,
         gps_fix, TEXT,
-        angle, REAL,
         GPS_x REAL,
         GPS_y REAL,
         throttle REAL,
@@ -178,7 +177,7 @@ def getData():
     global data, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
 
     # Unpack the data
-    timestamp, ampHrs, voltage, current, speed, miles, fix, angle, gpsX, gpsY, \
+    timestamp, ampHrs, voltage, current, speed, miles, fix, gpsX, gpsY, \
         throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
         rool, pitch, heading, altitude = data
 
