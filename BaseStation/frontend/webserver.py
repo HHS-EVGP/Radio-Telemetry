@@ -4,8 +4,8 @@ import sqlite3
 from datetime import datetime
 import time
 
-import socket
-import select
+import serial
+import threading
 import pickle
 import os
 
@@ -15,6 +15,7 @@ app = Flask(__name__)
 DBPATH = "BaseStation/EVGPTelemetry.sqlite"
 AUTHCODE = "hhsevgp" # Make this whatever you like
 authedUsrs = []
+data = [None] * 22 # Number of data points
 
 endAmpHrs = None
 lapTime = None
@@ -57,13 +58,113 @@ if os.path.exists("raceInfo.pkl"):
             pausedTime = 0
             whenPaused = None
 
-# Set up a global connection to the socket
-SOCKETPATH = "/tmp/telemSocket"
-socketConn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-socketConn.connect(SOCKETPATH)
-print('Connected to socket:', SOCKETPATH)
+# Background function to read and store data from serial
+def storeData():
+    global data, DBPATH
+    header = "$DATA,"
 
-lastSocketDump = [None] * 15 # Number of data columns
+    # Link the database to the python cursor
+    con = sqlite3.connect(DBPATH)
+    cur = con.cursor()
+
+    # If main table does not exist as a table, create it
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS main (
+        time REAL UNIQUE PRIMARY KEY,
+        amp_hours REAL,
+        voltage REAL,
+        current REAL,
+        speed REAL,
+        miles REAL,
+        gps_fix, TEXT,
+        angle, REAL,
+        GPS_x REAL,
+        GPS_y REAL,
+        throttle REAL,
+        brake REAL,
+        motor_temp REAL,
+        batt_1 REAL,
+        batt_2 REAL,
+        batt_3 REAL,
+        batt_4 REAL,
+        ambient_temp, REAL,
+        rool REAL,
+        pitch, REAL,
+        heading, REAL,
+        altitude, REAL,
+        laps NUMERIC
+    )
+    """)
+    con.commit()
+
+    # Find a list of days that are present in the database
+    cur.execute('''
+        SELECT DISTINCT
+            DATE(time, 'unixepoch') AS day
+            FROM main
+            ORDER BY day;
+    ''')
+    days = cur.fetchall()
+
+    ## Create individual views for each existing day if they do not exist
+    for day in days:
+        cur.execute(f"""
+        CREATE VIEW IF NOT EXISTS '{day[0]}'
+        AS SELECT * FROM main
+        WHERE DATE(time, 'unixepoch') = '{day[0]}';
+        """)
+    con.commit()
+
+    insert_data_sql = """
+        INSERT INTO main (
+            time, throttle, brake, Motor_temp, batt_1, batt_2, batt_3, batt_4,
+            amp_hours, voltage, current, speed, miles, GPS_X, GPS_Y
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+    # Establish a serial connection
+    ser = None
+    while ser is None:
+        try:
+            # Try to auto-detect a USB serial device
+            for port in [f"/dev/ttyUSB{i}" for i in range(10)] + [f"/dev/ttyACM{i}" for i in range(10)]:
+                try:
+                    ser = serial.Serial(port, 115200, timeout=1)
+                    print(f"Connected to serial port on {port}")
+                    break
+                except (serial.SerialException, OSError):
+                    continue
+
+            if ser is None:
+                print("No serial device found, retrying.")
+                time.sleep(1)
+        except Exception as e:
+            print("Serial connection error:", e)
+            time.sleep(1)
+
+    # Constantly read and process the serial connection
+    while True:
+        try:
+            if ser.in_waiting:
+                serDump = ser.read(ser.in_waiting)
+
+                # If we don't have a complete line, read some more
+                if not serDump.endswith("\n"):
+                    continue
+
+                # Decode and split by lines
+                lines = serDump.decode(errors='ignore').splitlines()
+                for line in lines:
+                    if line.startswith(header):
+                        data = line[len(header):].split(",")
+
+                        # Insert into database
+                        cur.execute(insert_data_sql, data)
+
+        except Exception as e:
+            print("Serial read error:", e)
+            time.sleep(1)
+
 
 # Function to clean up data for display
 def cleanView(var, lenth):
@@ -74,21 +175,12 @@ def cleanView(var, lenth):
 # Page to serve a json with data
 @app.route("/getdata")
 def getData():
-    global lastSocketDump, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
-
-    # See if new data is available
-    readable, _, _ = select.select([socketConn], [], [], 0)
-    if readable:
-        # Read data from the socket
-        socketDump = socketConn.recv(1024)  # 1024 byte buffer
-        data = pickle.loads(socketDump)
-        lastSocketDump = data
-    else:
-        data = lastSocketDump
+    global data, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
 
     # Unpack the data
-    timestamp, throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, \
-        ampHrs, voltage, current, speed, miles, gpsX, gpsY = data
+    timestamp, ampHrs, voltage, current, speed, miles, fix, angle, gpsX, gpsY, \
+        throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
+        rool, pitch, heading, altitude = data
 
     # Calculate current race time
     if racing and timestamp is not None:
@@ -290,15 +382,14 @@ def usrUpdate():
             return ('', 200)
 
         else:
-            # Tie whenRaceStarted to the latest timestamp in the database
-            cur.execute("SELECT MAX(time) FROM main")
-            whenRaceStarted = cur.fetchone()[0]
 
-            # If noting in the database, use the socket value
-            if whenRaceStarted == None:
-                whenRaceStarted = timestamp
+            # Tie whenRaceStarted to the current timestamp
+            whenRaceStarted = timestamp
 
-            # If nothing form the socket, retrun an error
+            #cur.execute("SELECT MAX(time) FROM main")
+            #whenRaceStarted = cur.fetchone()[0]
+
+            # If we don't have a current value, return an error
             if whenRaceStarted == None:
                 return ("No data! Unable to start race", 422)
 
@@ -343,4 +434,9 @@ def debug():
 
 
 if __name__ == '__main__':
+    # Start the background thread to get data from serial
+    thread = threading.Thread(target=storeData, daemon=True)
+    thread.start()
+
+    # Start the server
     waitress.serve(app, host='0.0.0.0', port=80, threads=8)

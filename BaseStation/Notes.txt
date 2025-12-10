@@ -3,4 +3,4 @@ Password: "evgp"
 hostname: "basestation.local"
 
 Software needed:
-    With pip: python-cc1101, Flask, waitress
+    With pip: pyserial Flask waitress

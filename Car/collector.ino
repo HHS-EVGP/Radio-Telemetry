@@ -63,19 +63,6 @@ uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
 // Packet structure
 typedef struct struct_message {
   double timestamp = NAN;  // Initial value
-  
-  // IMU
-  float rool;
-  float pitch;
-  float heading;
-  float altitude;
-  float ambientTemp;
-
-  // GPS
-  bool fix;
-  double gpsX;
-  double gpsY;
-  float angle;
 
   // CA
   float ampHrs;
@@ -83,6 +70,12 @@ typedef struct struct_message {
   float current;
   float speed;
   float miles;
+
+  // GPS
+  bool fix;
+  double gpsX;
+  double gpsY;
+  float angle;
 
   // Analog
   float throttle;
@@ -92,6 +85,13 @@ typedef struct struct_message {
   float batt2;
   float batt3;
   float batt4;
+
+  // IMU
+  float ambientTemp;
+  float rool;
+  float pitch;
+  float heading;
+  float altitude;
 } struct_message;
 
 // Create a struct_message called carData
@@ -285,23 +285,19 @@ void initSD() {
   }
 }
 
+// Helper to convert a packet to a string
 String packetToString(const struct_message &msg) {
   String s = "";
   s += String(msg.timestamp) + ",";
-  s += String(msg.rool) + ",";
-  s += String(msg.pitch) + ",";
-  s += String(msg.heading) + ",";
-  s += String(msg.altitude) + ",";
-  s += String(msg.ambientTemp) + ",";
-  s += (msg.fix ? "true" : "false") + String(",");
-  s += String(msg.gpsX) + ",";
-  s += String(msg.gpsY) + ",";
-  s += String(msg.angle) + ",";
   s += String(msg.ampHrs) + ",";
-  s += String(msg.voltage + ",");
+  s += String(msg.voltage) + ",";
   s += String(msg.current) + ",";
   s += String(msg.speed) + ",";
   s += String(msg.miles) + ",";
+  s += (msg.fix ? "True" : "False") + String(",");
+  s += String(msg.angle) + ",";
+  s += String(msg.gpsX) + ",";
+  s += String(msg.gpsY) + ",";
   s += String(msg.throttle) + ",";
   s += String(msg.brake) + ",";
   s += String(msg.motorTemp) + ",";
@@ -309,6 +305,11 @@ String packetToString(const struct_message &msg) {
   s += String(msg.batt2) + ",";
   s += String(msg.batt3) + ",";
   s += String(msg.batt4) + ",";
+  s += String(msg.ambientTemp) + ",";
+  s += String(msg.rool) + ",";
+  s += String(msg.pitch) + ",";
+  s += String(msg.heading) + ",";
+  s += String(msg.altitude) + ",";
 
   return s;
 }
@@ -422,7 +423,6 @@ void loop() {
   getGPS();
   getCA(caBuffer);
   getAnalog();
-
 
   // Transmit and write data
   writeData();
