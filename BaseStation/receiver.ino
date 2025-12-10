@@ -78,7 +78,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
 void setup() {
   // Initialize serial connection to the pi
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Enter Long range mode
   WiFi.mode(WIFI_STA);
