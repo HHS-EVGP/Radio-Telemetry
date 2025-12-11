@@ -8,6 +8,8 @@ The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run r
 
 ## System Structure & Running coming soon
 
+### Check out our data [here](https://github.com/HHS-EVGP/Data-Archive)!
+
 ### Acknowledgements
 
 Special thanks to GlobalEEE and all event sponsors.
