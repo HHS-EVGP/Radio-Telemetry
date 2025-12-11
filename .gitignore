@@ -1,5 +1,6 @@
 .vscode/
 pyenv/
+BaseStation/__pycache__
 BaseStation/frontend/__pycache__
 BaseStation/EVGPTelemetry.sqlite
 raceInfo.pkl
