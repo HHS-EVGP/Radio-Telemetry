@@ -71,7 +71,7 @@ def getData():
     global data, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
 
     # Unpack the data
-    timestamp, ampHrs, voltage, current, speed, miles, fix, gpsX, gpsY, \
+    timestamp, ampHrs, voltage, current, speed, miles, gpsFix, gpsX, gpsY, \
         throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
         rool, pitch, heading, altitude = sharedVars.data
 
@@ -109,23 +109,38 @@ def getData():
             endAmpHrs = ampHrs * (3600 / rawRaceTime)
 
     return jsonify(
+        # Statuses
         systime=datetime.now().strftime("%H:%M:%S"),
         timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp is not None else None,
         throttle=cleanView(throttle, 3),
         brakePedal=cleanView(brakePedal, 3),
+
+        # Temps
         motorTemp=cleanView(motorTemp, 3),
         batt1=cleanView(batt1, 3),
         batt2=cleanView(batt2, 3),
         batt3=cleanView(batt3, 3),
         batt4=cleanView(batt4, 3),
+        ambientTemp=cleanView(ambientTemp, 3),
+
+        # CA
         ampHrs=cleanView(ampHrs, 3),
         endAmpHrs=cleanView(endAmpHrs, 3),
         voltage=cleanView(voltage, 3),
         current=cleanView(current, 3),
         speed=cleanView(speed, 3),
         miles=cleanView(miles, 3),
+
+        # Position
+        gpsFix=gpsFix,
         gpsX=cleanView(gpsX, 3),
         gpsY=cleanView(gpsY, 3),
+        rool=cleanView(rool, 3),
+        pitch=cleanView(pitch, 3),
+        heading=cleanView(heading, 3),
+        altitude=cleanView(altitude, 3),
+
+        # Race info
         laps=laps,
         lapTime=cleanView(lapTime, 1),
         lastLapTime=cleanView(float(prevLapTimes[-1]), 1) if len(prevLapTimes) != 0 else None,

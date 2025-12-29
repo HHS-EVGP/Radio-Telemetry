@@ -13,7 +13,7 @@ import sharedVars
 def storeData():
     serialHeader = "$DATA,"
 
-    # Uncomment theese lines for a random data feed
+    # Theese lines are for a random data feed for testing
     #while True:
     #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
     #    time.sleep(0.25)
@@ -125,4 +125,6 @@ thread = threading.Thread(target=storeData, daemon=True)
 thread.start()
 
 # Start the webserver
-waitress.serve(app, host='0.0.0.0', port=80, threads=8)
+app.run(host='0.0.0.0', port=5000, debug=False)
+
+#waitress.serve(app, host='0.0.0.0', port=80, threads=8)
