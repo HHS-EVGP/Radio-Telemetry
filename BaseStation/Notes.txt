@@ -1,6 +1,0 @@
-User:     "basestation"
-Password: "evgp"
-hostname: "basestation.local"
-
-Software needed:
-    With pip: pyserial Flask waitress
