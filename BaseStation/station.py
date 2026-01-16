@@ -13,7 +13,7 @@ import sharedVars
 def storeData():
     serialHeader = "$DATA,"
 
-    # Theese lines are for a random data feed for testing
+    # Theese lines are for a random data feed during testing
     #while True:
     #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
     #    time.sleep(0.25)

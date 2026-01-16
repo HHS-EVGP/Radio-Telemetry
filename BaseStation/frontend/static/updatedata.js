@@ -157,11 +157,18 @@ function getData() {
       if (!response.ok) throw new Error("Server offline");
       return response.json();
     })
+    .catch((err) => {
+      // Show server warning
+      document.getElementById("serverWarn").style.display = "block";
+    })
+
     .then((data) => {
+      // Hide server warning since we got data
+      document.getElementById("serverWarn").style.display = "none";
+
       // Statuses
       document.getElementById("sysTime").textContent = data.systime ?? "NNN";
-      document.getElementById("timeStamp").textContent =
-        data.timestamp ?? "NNN";
+      document.getElementById("timeStamp").textContent = data.timestamp ?? "NNN";
 
       // Update the throttle and brake chart
       window.throttleBrakeChart.data.datasets[0].data = [
@@ -171,14 +178,14 @@ function getData() {
       window.throttleBrakeChart.update();
 
       // Temperatures
-      document.getElementById("motorTemp").textContent =
-        data.motorTemp ?? "NNN";
+      document.getElementById("ambientTemp").textContent = data.ambientTemp ?? "NNN";
+      document.getElementById("motorTemp").textContent = data.motorTemp ?? "NNN";
       document.getElementById("batt1").textContent = data.batt1 ?? "NNN";
       document.getElementById("batt2").textContent = data.batt2 ?? "NNN";
       document.getElementById("batt3").textContent = data.batt3 ?? "NNN";
       document.getElementById("batt4").textContent = data.batt4 ?? "NNN";
 
-      // Check if any temperature is above 50 degrees and turn them red
+      // Check if any component temperature is above 50 degrees and turn them red
       ["motorTemp", "batt1", "batt2", "batt3", "batt4"].forEach((id) => {
         const element = document.getElementById(id);
         const value = parseFloat(data[id]) ?? 0;
@@ -197,8 +204,7 @@ function getData() {
       document.getElementById("miles").textContent = data.miles ?? "NNN.NNN";
 
       // Estimated end amp hours
-      document.getElementById("estEndAhs").textContent =
-        data.endAmpHrs ?? "NNN.NNN";
+      document.getElementById("estEndAhs").textContent = data.endAmpHrs ?? "NNN.NNN";
 
       // Timimg
       document.getElementById("laps").textContent = data.laps ?? "NN";
@@ -209,8 +215,7 @@ function getData() {
 
       // If racetime_minutes is not 0, display it
       if (data.raceTimeMinutes != 0) {
-        document.getElementById("raceTimeMinutes").textContent =
-          data.raceTimeMinutes;
+        document.getElementById("raceTimeMinutes").textContent = data.raceTimeMinutes;
       }
 
       // Display of race controls or of authenticate button
@@ -251,6 +256,12 @@ function getData() {
         document.getElementById("paused").textContent = "Pause";
       }
 
+      // IMU
+      document.getElementById("rool").textContent = data.rool ?? "NNN";
+      document.getElementById("pitch").textContent = data.pitch ?? "NNN";
+      document.getElementById("heading").textContent = data.heading ?? "NNN";
+      document.getElementById("altitude").textContent = data.altitude ?? "NNN";
+
       // GPS
       document.getElementById("gpsX").textContent = data.gpsX ?? "NNN";
       document.getElementById("gpsY").textContent = data.gpsY ?? "NNN";
@@ -269,12 +280,6 @@ function getData() {
         window.gpsChart.data.datasets[0].data.shift();
       }
 
-      // Hide server warning since we got data
-      document.getElementById("serverWarn").style.display = "none";
-    })
-    .catch((err) => {
-      // Show server warning
-      document.getElementById("serverWarn").style.display = "block";
     });
 }
 setInterval(getData, 250); // Every 250ms
