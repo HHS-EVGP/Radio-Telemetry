@@ -49,18 +49,9 @@ unsigned long lastFullUART = 0;
 const String fileName = "EVGPData.txt";
 
 // Pins
-const int chipSelect = 29;
-
-const int errorLight = 10;
-const int dataLight = 11;
-
-const int throttlePin = 3;
-const int brakePin = 4;
-const int motorPin = 5;
-const int batt1Pin = 6;
-const int batt2Pin = 7;
-const int batt3Pin = 8;
-const int batt4Pin = 9;
+const int chipSelect = 5;
+const int errorLight = 8;
+const int dataLight = 7;
 
 // Thermistor values
 const float R1 = 13000.0;
@@ -248,6 +239,32 @@ void getGPS() {
 
   carData.gpsX = x;
   carData.gpsY = y;
+}
+
+void readCA() {
+  if (CA.available()) {
+    char c = CA.read();
+
+    // Skip carrage returns
+    if (c == '\r') return;
+
+    if (c == '\n') {
+      // Null terminate the string
+      CABuffer[CAIndex] = '\0';
+      // Reset the buffer index
+      CAIndex = 0;
+
+      // Verify that we have five |s in our message
+      if (verifyPipes(CABuffer)) {
+        haveCA = true;
+      } else {
+        warning("Invalid CA String");
+      }
+
+    } else if (CAIndex < CA_BUF_SIZE - 1) {  // If we have room in the buffer
+      CABuffer[CAIndex++] = c;               // add c to the buffer while increasing the index
+    }
+  }
 }
 
 bool verifyPipes(char *buff) {
@@ -444,41 +461,19 @@ void setup() {
 
 void loop() {
   // Timing is based off of GPS and CA mesasges
-  if (CA.available()) {
-    char c = CA.read();
-
-    // Skip carrage returns
-    if (c == '\r') return;
-
-    if (c == '\n') {
-      // Null terminate the string
-      CABuffer[CAIndex] = '\0';
-      // Reset the buffer index
-      CAIndex = 0;
-
-      // Verify that we have five |s in our message
-      if (verifyPipes(CABuffer)) {
-        haveCA = true;
-      } else {
-        warning("Invalid CA String");
-      }
-
-    } else if (CAIndex < CA_BUF_SIZE - 1) {  // If we have room in the buffer
-      CABuffer[CAIndex++] = c;               // add c to the buffer while increasing the index
-    }
-  }
+  readCA();
 
   // If we don't have a CA or a GPS message, wait
   if (!GPS.newNMEAreceived() || haveCA == false) {
-    // Send a warning if it has been over a second since the last message
+    // Send a warning if it has been over a second since complete data
     if (millis() - lastFullUART > 1000) {
       warning("Over 1 second since last full UART!");
     }
     return;
   }
+
   // Log when we got complete UART data
   lastFullUART = millis();
-
 
   //Get data
   getIMU();
