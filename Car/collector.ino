@@ -10,6 +10,7 @@
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_10DOF.h>
 #include <Adafruit_GPS.h>
+#include <7semi_ADS1xx5.h>
 
 #include <esp_now.h>
 #include <WiFi.h>
@@ -26,12 +27,23 @@ Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(18001);
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 
 // Connect to the GPS helper on the hardware port
-#define GPSSerial Serial1
+#define GPSSerial Serial2
 Adafruit_GPS GPS(&GPSSerial);
 
-// CA Serial
+// CA Serial and buffer
 HardwareSerial CA(2);
-String caBuffer;
+
+#define CA_BUF_SIZE 120
+char CABuffer[CA_BUF_SIZE];
+uint8_t CAIndex = 0;
+bool haveCA = false;
+
+// Define ADCs
+ADS1xx5_7semi adc1(0x48);
+ADS1xx5_7semi adc2(0x49);
+
+// Counter of what time we got complete UART data
+unsigned long lastFullUART = 0;
 
 // Log file name
 const String fileName = "EVGPData.txt";
@@ -40,8 +52,7 @@ const String fileName = "EVGPData.txt";
 const int chipSelect = 29;
 
 const int errorLight = 10;
-const int writeLight = 11;
-const int radioLight = 12;
+const int dataLight = 11;
 
 const int throttlePin = 3;
 const int brakePin = 4;
@@ -145,6 +156,8 @@ void getIMU() {
     carData.rool = carData.pitch = NAN;
   }
 
+  // TODO: Acceleration callibrated based on pitch and rool
+
   // Heading
   mag.getEvent(&mag_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation)) {
@@ -230,28 +243,61 @@ void getGPS() {
 
   // Mercator project latitude and longitude into x and y
   double x = 6378100 * lonRad;
-  double y = 6378100 * log(tan((M_PI / 4) * (latRad / 2))); // in c++, log is ln
+  double y = 6378100 * log(tan((M_PI / 4) * (latRad / 2)));  // in c++, log is ln
   // 6378100 meters is the IAU nominal "zero tide" eqatorial radius of the earth
 
   carData.gpsX = x;
   carData.gpsY = y;
 }
 
-void getCA(String caBuffer) {
+bool verifyPipes(char *buff) {
+  int count = 0;
+
+  while (*buff != '\0') {
+    if (*buff == '|') {
+      count++;
+    }
+    buff++;
+  }
+
+  return (count == 4);  // true if count is 4
+}
+
+void getCA(char *caBuffer) {
   // Input from CA is: ampHrs|voltage|current|speed|miles\n
 
-  // Find the index of each pipe
-  int p1 = caBuffer.indexOf('|');
-  int p2 = caBuffer.indexOf('|', p1 + 1);  // Look for pipe, starting at p1 + 1
-  int p3 = caBuffer.indexOf('|', p2 + 1);
-  int p4 = caBuffer.indexOf('|', p3 + 1);
+  // One by one, search for the | delemiter and extract the variables
+  char *value = strtok(caBuffer, "|");
+  if (value != NULL) carData.ampHrs = atof(value);
 
-  // Define variables based on indexes
-  carData.ampHrs = caBuffer.substring(0, p1).toFloat();
-  carData.voltage = caBuffer.substring(p1 + 1, p2).toFloat();
-  carData.current = caBuffer.substring(p2 + 1, p3).toFloat();
-  carData.speed = caBuffer.substring(p3 + 1, p4).toFloat();
-  carData.miles = caBuffer.substring(p4 + 1).toFloat();  // toFloat() ignores the \n
+  value = strtok(NULL, "|");  // Using NULL means to start where we left off
+  if (value != NULL) carData.voltage = atof(value);
+
+  value = strtok(NULL, "|");
+  if (value != NULL) carData.current = atof(value);
+
+  value = strtok(NULL, "|");
+  if (value != NULL) carData.speed = atof(value);
+
+  value = strtok(NULL, "|");
+  if (value != NULL) carData.miles = atof(value);
+
+  // Reset haveCA
+  haveCA = false;
+}
+
+void initADCs() {
+  if (!adc1.begin()) {
+    fatalError("ADC1 Initialization Error");
+  }
+
+  if (!adc2.begin()) {
+    fatalError("ADC2 Initialization Error");
+  }
+
+  // Set the voltage measurment range between 0 and 4.096v
+  adc1.setRefV(PGA_4_096V);
+  adc2.setRefV(PGA_4_096V);
 }
 
 float thermistor(float value) {
@@ -265,15 +311,15 @@ float thermistor(float value) {
 
 void getAnalog() {
   // Throttle and brake
-  carData.throttle = map(analogRead(throttlePin), 0, 4095, 0, 1000);
-  carData.brake = map(analogRead(brakePin), 0, 4095, 0, 1000);
+  carData.throttle = map(adc2.readRawCH(0), 0, 32767, 0, 1000);
+  carData.brake = map(adc2.readRawCH(1), 0, 32767, 0, 1000);
 
   // Temperatures
-  carData.motorTemp = thermistor(analogRead(motorPin));
-  carData.batt1 = thermistor(analogRead(batt1Pin));
-  carData.batt2 = thermistor(analogRead(batt2Pin));
-  carData.batt3 = thermistor(analogRead(batt3Pin));
-  carData.batt4 = thermistor(analogRead(batt4Pin));
+  carData.motorTemp = thermistor(adc2.readRawCH(2));
+  carData.batt1 = thermistor(adc1.readRawCH(0));
+  carData.batt2 = thermistor(adc1.readRawCH(1));
+  carData.batt3 = thermistor(adc1.readRawCH(2));
+  carData.batt4 = thermistor(adc1.readRawCH(3));
 }
 
 void initSD() {
@@ -316,41 +362,18 @@ void writeData() {
 
   // if the file is available, write to it:
   if (dataFile) {
-    digitalWrite(writeLight, HIGH);
+    digitalWrite(dataLight, HIGH);
 
     dataFile.println(packetToString(carData));
     dataFile.close();
 
-    digitalWrite(writeLight, LOW);
-  }
-  // if the file isn't open, pop up an error:
-  else {
+    digitalWrite(dataLight, LOW);
+  } else {
     fatalError("Error opening data file");
   }
 }
 
-void transmitData() {
-  // Send it!
-  digitalWrite(radioLight, HIGH);
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&carData, sizeof(carData));
-  digitalWrite(radioLight, LOW);
-
-  if (result == ESP_OK) {
-    Serial.println("Data sent with success");
-  } else {
-    warning("Error transmitting data");
-  }
-}
-
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-}
-
-
-void setup() {
-  // Start usb serial
-  Serial.begin(115200);
-
+void initRF() {
   // Wifi mode for esp-now
   WiFi.mode(WIFI_STA);
 
@@ -374,10 +397,33 @@ void setup() {
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
     fatalError("Failed to add esp_now peer");
   }
+}
 
+void transmitData() {
+  // Send it!
+  digitalWrite(dataLight, HIGH);
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&carData, sizeof(carData));
+  digitalWrite(dataLight, LOW);
+
+  if (result != ESP_OK) {
+    warning("Error transmitting data");
+  }
+}
+
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+}
+
+
+void setup() {
+  // Start usb serial
+  Serial.begin(115200);
+
+  // Set up esp-now
+  initRF();
 
   // Start CA Serial
-  CA.begin(9600);
+  CA.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
 
   // Start GPS serial
   GPS.begin(9600);
@@ -388,36 +434,56 @@ void setup() {
 
   // Pin modes
   pinMode(errorLight, OUTPUT);
-  pinMode(writeLight, OUTPUT);
-  pinMode(radioLight, OUTPUT);
+  pinMode(dataLight, OUTPUT);
 
-  pinMode(throttlePin, INPUT);
-  pinMode(brakePin, INPUT);
-  pinMode(motorPin, INPUT);
-  pinMode(batt1Pin, INPUT);
-  pinMode(batt2Pin, INPUT);
-  pinMode(batt3Pin, INPUT);
-  pinMode(batt4Pin, INPUT);
-
-  // Start IMU and SD connections
+  // Start IMU, SD, and ADC Connections
   initIMU();
   initSD();
+  initADCs();
 }
 
 void loop() {
-  // Read CA (GPS is read in the background)
-  char caChar = CA.read();
-  caBuffer += caChar;
+  // Timing is based off of GPS and CA mesasges
+  if (CA.available()) {
+    char c = CA.read();
+
+    // Skip carrage returns
+    if (c == '\r') return;
+
+    if (c == '\n') {
+      // Null terminate the string
+      CABuffer[CAIndex] = '\0';
+      // Reset the buffer index
+      CAIndex = 0;
+
+      // Verify that we have five |s in our message
+      if (verifyPipes(CABuffer)) {
+        haveCA = true;
+      } else {
+        warning("Invalid CA String");
+      }
+
+    } else if (CAIndex < CA_BUF_SIZE - 1) {  // If we have room in the buffer
+      CABuffer[CAIndex++] = c;               // add c to the buffer while increasing the index
+    }
+  }
 
   // If we don't have a CA or a GPS message, wait
-  if (!GPS.newNMEAreceived() || caChar != '\n') {
+  if (!GPS.newNMEAreceived() || haveCA == false) {
+    // Send a warning if it has been over a second since the last message
+    if (millis() - lastFullUART > 1000) {
+      warning("Over 1 second since last full UART!");
+    }
     return;
   }
+  // Log when we got complete UART data
+  lastFullUART = millis();
+
 
   //Get data
   getIMU();
   getGPS();
-  getCA(caBuffer);
+  getCA(CABuffer);
   getAnalog();
 
   // Transmit and write data
