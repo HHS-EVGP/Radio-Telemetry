@@ -6,7 +6,22 @@ This project is a data collection and visualization system for an electric race 
 
 The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run racing team that builds an electric car and races it in an endurance race. As of 2025, we are a four-year-old team, and from the start, live data has been an important part of our race strategy.
 
-## System Structure & Running coming soon
+## System Structure
+
+## Requirements
+
+To programm the ESP32 in the Car, we use Arduino IDE for simplicity, with the following libraries:
+- `7Semi-ADS1xx5`
+- `Adaruit 10DOF`
+- `Adafruit GPS Library` 
+> Be sure to install all dependancies when prompted
+
+On the Base Station, create a python virtual enviroment and install the following with pip:
+- `pyserial`
+- `flask`
+- `waitress`
+
+## Running coming soon
 
 ### Check out our data [here](https://github.com/HHS-EVGP/Data-Archive)!
 
