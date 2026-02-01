@@ -23,15 +23,14 @@ Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
 Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(18001);
 
-// Sea Level Pressure
+// Use the average sea level pressure
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 
-// Connect to the GPS helper on the hardware port
-#define GPSSerial Serial2
-Adafruit_GPS GPS(&GPSSerial);
+// Define the gps serial
+Adafruit_GPS GPS(&Serial2);
 
 // CA Serial and buffer
-HardwareSerial CA(2);
+HardwareSerial CA(1);
 
 #define CA_BUF_SIZE 120
 char CABuffer[CA_BUF_SIZE];
@@ -43,15 +42,15 @@ ADS1xx5_7semi adc1(0x48);
 ADS1xx5_7semi adc2(0x49);
 
 // Counter of what time we got complete UART data
-unsigned long lastFullUART = 0;
+unsigned long UARTwarnTimer = 0;
 
 // Log file name
-const String fileName = "EVGPData.txt";
+const String fileName = "Data.txt";
 
 // Pins
 const int chipSelect = 5;
-const int errorLight = 8;
-const int dataLight = 7;
+const int dataLight = 25;
+const int errorLight = 26;
 
 // Thermistor values
 const float R1 = 13000.0;
@@ -89,15 +88,16 @@ typedef struct struct_message {
 
   // IMU
   float ambientTemp;
-  float rool;
+  float roll;
   float pitch;
   float heading;
   float altitude;
 } struct_message;
 
-// Create a struct_message called carData
+// The current data that all functions update
 struct_message carData;
 
+// Information needed to talk to the receiver
 esp_now_peer_info_t peerInfo;
 
 // Helper functions
@@ -105,8 +105,9 @@ void fatalError(String message) {
   Serial.println(message);
 
   digitalWrite(errorLight, HIGH);
-  while (true)
-    ;
+  while (true) {
+    delay(100);
+  }
 }
 
 void warning(String message) {
@@ -137,17 +138,17 @@ void getIMU() {
   sensors_event_t bmp_event;
   sensors_vec_t orientation;
 
-  // Pitch and rool
+  // Pitch and roll
   accel.getEvent(&accel_event);
   if (dof.accelGetOrientation(&accel_event, &orientation)) {
-    carData.rool = orientation.roll;
+    carData.roll = orientation.roll;
     carData.pitch = orientation.pitch;
   } else {
     warning("No Accelerometer Value!");
-    carData.rool = carData.pitch = NAN;
+    carData.roll = carData.pitch = NAN;
   }
 
-  // TODO: Acceleration callibrated based on pitch and rool
+  // TODO: Acceleration callibrated based on pitch and roll
 
   // Heading
   mag.getEvent(&mag_event);
@@ -158,7 +159,7 @@ void getIMU() {
     carData.heading = NAN;
   }
 
-  // Altitude
+  // Altitude and temperature
   bmp.getEvent(&bmp_event);
   if (bmp_event.pressure) {
     // Get ambient temperature in C
@@ -219,6 +220,8 @@ void getGPS() {
     carData.fix = false;
     carData.gpsX = NAN;
     carData.gpsY = NAN;
+
+    return;
   }
 
   // Populate varibles
@@ -253,6 +256,8 @@ void readCA() {
       CABuffer[CAIndex] = '\0';
       // Reset the buffer index
       CAIndex = 0;
+
+      Serial.println(CABuffer);
 
       // Verify that we have five |s in our message
       if (verifyPipes(CABuffer)) {
@@ -365,7 +370,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.batt3) + ",";
   s += String(msg.batt4) + ",";
   s += String(msg.ambientTemp) + ",";
-  s += String(msg.rool) + ",";
+  s += String(msg.roll) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
   s += String(msg.altitude) + ",";
@@ -394,8 +399,19 @@ void initRF() {
   // Wifi mode for esp-now
   WiFi.mode(WIFI_STA);
 
-  // Enter Long range mode
+  // Start wifi to set configuration
+  if (esp_wifi_start() != ESP_OK) {
+    fatalError("WiFi start failed");
+  }
+
+  // Set low data rate mode
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
+
+  // Override data rate to lowest possible
+  //esp_wifi_config_espnow_rate(WIFI_IF_STA, WIFI_PHY_RATE_LORA_250K);
+
+  // Set max power
+  esp_wifi_set_max_tx_power(80);  //20 dbm
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -438,11 +454,12 @@ void setup() {
 
   // Set up esp-now
   initRF();
-
+  
   // Start CA Serial
   CA.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
 
-  // Start GPS serial
+  // Start Seral2 for gps
+  Serial2.begin(9600, SERIAL_8N1, 34, 35); // use pins 34 and 35
   GPS.begin(9600);
 
   // Configure gps module
@@ -457,23 +474,27 @@ void setup() {
   initIMU();
   initSD();
   initADCs();
+
+  Serial.println("Setup Successful!");
 }
 
 void loop() {
   // Timing is based off of GPS and CA mesasges
   readCA();
+  Serial.print(GPS.read());
 
   // If we don't have a CA or a GPS message, wait
-  if (!GPS.newNMEAreceived() || haveCA == false) {
+  if (!GPS.newNMEAreceived() || !haveCA) {
     // Send a warning if it has been over a second since complete data
-    if (millis() - lastFullUART > 1000) {
+    if (millis() - UARTwarnTimer >= 1000) {
       warning("Over 1 second since last full UART!");
+      UARTwarnTimer = millis(); // Restet the uart warning timer
     }
     return;
   }
 
   // Log when we got complete UART data
-  lastFullUART = millis();
+  UARTwarnTimer = millis();
 
   //Get data
   getIMU();
