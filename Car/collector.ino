@@ -45,7 +45,7 @@ ADS1xx5_7semi adc2(0x49);
 unsigned long UARTwarnTimer = 0;
 
 // Log file name
-const String fileName = "Data.txt";
+const String fileName = "evdata.txt";
 
 // Pins
 const int chipSelect = 5;
@@ -257,7 +257,7 @@ void readCA() {
       // Reset the buffer index
       CAIndex = 0;
 
-      Serial.println(CABuffer);
+      //Serial.println(CABuffer);
 
       // Verify that we have five |s in our message
       if (verifyPipes(CABuffer)) {
@@ -373,7 +373,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.roll) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
-  s += String(msg.altitude) + ",";
+  s += String(msg.altitude);
 
   return s;
 }
@@ -454,17 +454,18 @@ void setup() {
 
   // Set up esp-now
   initRF();
-  
+
   // Start CA Serial
   CA.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
 
   // Start Seral2 for gps
-  Serial2.begin(9600, SERIAL_8N1, 34, 35); // use pins 34 and 35
+  Serial2.begin(9600, SERIAL_8N1, 34, 35);  // use pins 34 and 35
   GPS.begin(9600);
 
   // Configure gps module
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);
+  delay(500);                                    // Give the gps time to boot
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);  // Output RMC and GGA
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);     // Output at 5 hz
 
   // Pin modes
   pinMode(errorLight, OUTPUT);
@@ -481,14 +482,17 @@ void setup() {
 void loop() {
   // Timing is based off of GPS and CA mesasges
   readCA();
-  Serial.print(GPS.read());
+  char g = GPS.read();
+  if (g) {
+    Serial.write(g);
+  }
 
   // If we don't have a CA or a GPS message, wait
   if (!GPS.newNMEAreceived() || !haveCA) {
     // Send a warning if it has been over a second since complete data
     if (millis() - UARTwarnTimer >= 1000) {
       warning("Over 1 second since last full UART!");
-      UARTwarnTimer = millis(); // Restet the uart warning timer
+      UARTwarnTimer = millis();  // Restet the uart warning timer
     }
     return;
   }
@@ -501,6 +505,8 @@ void loop() {
   getGPS();
   getCA(CABuffer);
   getAnalog();
+
+  Serial.println(packetToString(carData));
 
   // Transmit and write data
   writeData();
