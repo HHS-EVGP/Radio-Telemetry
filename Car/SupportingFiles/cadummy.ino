@@ -1,4 +1,4 @@
-// This program is meant to be run on an arduino with another harware serial, such as the micro,
+// This program is meant to be run on an arduino with a second harware serial, such as the micro,
 // and stand in place of the cycle analyst when the car is not available 
 
 unsigned long txTime = 0;

@@ -16,6 +16,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 
+#define UARTdebug true
 
 // Assign a unique ID to the IMU sensors
 Adafruit_10DOF dof = Adafruit_10DOF();
@@ -41,11 +42,12 @@ bool haveCA = false;
 ADS1xx5_7semi adc1(0x48);
 ADS1xx5_7semi adc2(0x49);
 
-// Counter of what time we got complete UART data
+// Timestamp Holders
 unsigned long UARTwarnTimer = 0;
+unsigned long lastValidGPS = 0;
 
 // Log file name
-const String fileName = "evdata.txt";
+const String fileName = "/evdata.txt";
 
 // Pins
 const int chipSelect = 5;
@@ -185,8 +187,8 @@ double toUnixTimestamp(
 
   struct tm t = { 0 };
 
-  t.tm_year = year + 2000;  // adafruit gps gives year as 0-99
-  t.tm_mon = month - 1;     // mktime expects moths starting at 0
+  t.tm_year = year + 100;  // adafruit gps gives year as 0-99; t.tm_year is years since 1900
+  t.tm_mon = month - 1;    // mktime expects moths starting at 0
   t.tm_mday = day;
   t.tm_hour = hour;
   t.tm_min = minute;
@@ -209,11 +211,15 @@ double degToRad(double deg) {
 void getGPS() {
   // Attempt to parse gps message
   if (!GPS.parse(GPS.lastNMEA())) {
-    warning("GPS Parse Error!");
+    // Give a warning if the parse fails after the first second
+    // (The gps module spits out some system info at first)
+    if (millis() > 1000) {
+      warning("GPS Parse Error!");
+    }
 
-    // Add 1/100 a second to the timestamp (Very low risk for conflict with the next data point)
-    if (carData.timestamp != NAN) {  // Would be NAN if we're on our first data point
-      carData.timestamp += 0.01;     // This ensures every datapoint has a timestamp
+    // Derive the timestamp from how long it has been since the last GPS point
+    if (carData.timestamp != NAN) {  // Timestamp would be NAN if we're on our first data point
+      carData.timestamp = millis() - lastValidGPS + carData.timestamp;
     }
 
     // Set neutral values
@@ -223,6 +229,9 @@ void getGPS() {
 
     return;
   }
+
+  // Timestamp when we got valid GPS data
+  lastValidGPS = millis();
 
   // Populate varibles
   carData.timestamp = toUnixTimestamp(GPS.year, GPS.month, GPS.day,
@@ -257,7 +266,10 @@ void readCA() {
       // Reset the buffer index
       CAIndex = 0;
 
-      //Serial.println(CABuffer);
+      // Log CA message if needed
+      if (UARTdebug) {
+        Serial.println(CABuffer);
+      }
 
       // Verify that we have five |s in our message
       if (verifyPipes(CABuffer)) {
@@ -380,13 +392,13 @@ String packetToString(const struct_message &msg) {
 
 void writeData() {
   // open the file. note that only one file can be open at a time
-  File dataFile = SD.open(fileName, FILE_WRITE);
+  File dataFile = SD.open(fileName, FILE_APPEND);
 
   // if the file is available, write to it:
   if (dataFile) {
     digitalWrite(dataLight, HIGH);
 
-    dataFile.println(packetToString(carData));
+    dataFile.println(packetToString(carData));  // Append the file
     dataFile.close();
 
     digitalWrite(dataLight, LOW);
@@ -459,7 +471,7 @@ void setup() {
   CA.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
 
   // Start Seral2 for gps
-  Serial2.begin(9600, SERIAL_8N1, 34, 35);  // use pins 34 and 35
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);  // use pins 16 and 17 (EP 8 and 7)
   GPS.begin(9600);
 
   // Configure gps module
@@ -475,16 +487,16 @@ void setup() {
   initIMU();
   initSD();
   initADCs();
-
-  Serial.println("Setup Successful!");
 }
 
 void loop() {
   // Timing is based off of GPS and CA mesasges
   readCA();
-  char g = GPS.read();
-  if (g) {
-    Serial.write(g);
+  char c = GPS.read();
+
+  // Log gps message if needed
+  if (UARTdebug && c) {
+    Serial.write(c);
   }
 
   // If we don't have a CA or a GPS message, wait
@@ -506,7 +518,9 @@ void loop() {
   getCA(CABuffer);
   getAnalog();
 
+  // Output the data for debug
   Serial.println(packetToString(carData));
+  Serial.println();
 
   // Transmit and write data
   writeData();
