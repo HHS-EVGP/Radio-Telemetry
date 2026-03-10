@@ -10,7 +10,7 @@ The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run r
 
 ## Requirements
 
-To programm the ESP32 in the Car, we use Arduino IDE for simplicity, with the following libraries:
+To programm the ESP32 in the Car we use Arduino IDE with the following libraries:
 - `7Semi-ADS1xx5`
 - `Adaruit 10DOF`
 - `Adafruit GPS Library` 
@@ -21,11 +21,11 @@ On the Base Station, create a python virtual enviroment and install the followin
 - `flask`
 - `waitress`
 
-## Running coming soon
+## Running Documentation Coming Soon!
 
-### Check out our data [here](https://github.com/HHS-EVGP/Data-Archive)!
+## Check out our data [here](https://github.com/HHS-EVGP/Data-Archive)!
 
-### Acknowledgements
+## Acknowledgements
 
 Special thanks to GlobalEEE and all event sponsors.
 
