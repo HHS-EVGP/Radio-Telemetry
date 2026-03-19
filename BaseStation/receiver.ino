@@ -4,7 +4,7 @@
 
 // Packet structure
 typedef struct struct_message {
-  double timestamp = NAN;  // Initial value
+  double timestamp;
 
   // CA
   float ampHrs;
@@ -29,11 +29,12 @@ typedef struct struct_message {
 
   // IMU
   float ambientTemp;
-  float rool;
+  float roll;
   float pitch;
   float heading;
   float altitude;
 } struct_message;
+
 
 // Create a struct_message called carData
 struct_message carData;
@@ -58,7 +59,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.batt3) + ",";
   s += String(msg.batt4) + ",";
   s += String(msg.ambientTemp) + ",";
-  s += String(msg.rool) + ",";
+  s += String(msg.roll) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
   s += String(msg.altitude);
