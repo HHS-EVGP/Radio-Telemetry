@@ -61,7 +61,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.rool) + ",";
   s += String(msg.pitch) + ",";
   s += String(msg.heading) + ",";
-  s += String(msg.altitude) + ",";
+  s += String(msg.altitude);
 
   return s;
 }
