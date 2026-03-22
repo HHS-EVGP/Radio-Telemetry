@@ -16,7 +16,7 @@ To programm the ESP32 in the Car we use Arduino IDE with the following libraries
 - `Adafruit GPS Library`
 > Be sure to install all dependancies when prompted
 
-For the esp32 acting as a receiver, you need `ArduinoJson` through Arduino IDE
+For the ESP32 acting as a receiver, you need `ArduinoJson` through Arduino IDE
 
 On the Base Station, create a python virtual enviroment and install the following with pip:
 - `pyserial`

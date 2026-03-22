@@ -65,7 +65,7 @@ uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
 
 // Packet structure
 typedef struct struct_message {
-  double timestamp = NAN;  // Initial value
+  uint64_t timestamp = NAN;  // Initial value
 
   // CA
   float ampHrs;
@@ -180,7 +180,7 @@ void getIMU() {
   }
 }
 
-double toUnixTimestamp(
+uint64_t toUnixTimestamp(
   int year, int month, int day,
   int hour, int minute, int seconds,
   int milliseconds) {
@@ -200,8 +200,8 @@ double toUnixTimestamp(
 
   time_t unixSec = mktime(&t);
 
-  // Add milliseconds
-  return (double)unixSec + (milliseconds / 1000.0f);
+  // Return timestamp in milliseconds
+  return (uint64_t)unixSec * 1000 + milliseconds;
 }
 
 double degToRad(double deg) {
@@ -246,8 +246,8 @@ void getGPS() {
 
   // Mercator project latitude and longitude into x and y
   double x = 6378100 * lonRad;
-  double y = 6378100 * log(tan((M_PI / 4) * (latRad / 2)));  // in c++, log is ln
-  // 6378100 meters is the IAU nominal "zero tide" eqatorial radius of the earth
+  double y = 6378100 * log(tan((M_PI / 4) + (latRad / 2)));  // in c++ log is natural log
+  // 6378100 meters is the IAU nominal "zero tide" equatorial radius of the earth
 
   carData.gpsX = x;
   carData.gpsY = y;
