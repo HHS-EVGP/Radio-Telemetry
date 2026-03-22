@@ -1,10 +1,11 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <ArduinoJson.h>
 
 // Packet structure
 typedef struct struct_message {
-  double timestamp;
+  uint64_t timestamp;
 
   // CA
   float ampHrs;
@@ -39,51 +40,59 @@ typedef struct struct_message {
 // Create a struct_message called carData
 struct_message carData;
 
-// Helper to convert a packet to a string
-String packetToString(const struct_message &msg) {
-  String s = "";
-  s += String(msg.timestamp) + ",";
-  s += String(msg.ampHrs) + ",";
-  s += String(msg.voltage) + ",";
-  s += String(msg.current) + ",";
-  s += String(msg.speed) + ",";
-  s += String(msg.miles) + ",";
-  s += (msg.fix ? "True" : "False") + String(",");
-  s += String(msg.gpsX) + ",";
-  s += String(msg.gpsY) + ",";
-  s += String(msg.throttle) + ",";
-  s += String(msg.brake) + ",";
-  s += String(msg.motorTemp) + ",";
-  s += String(msg.batt1) + ",";
-  s += String(msg.batt2) + ",";
-  s += String(msg.batt3) + ",";
-  s += String(msg.batt4) + ",";
-  s += String(msg.ambientTemp) + ",";
-  s += String(msg.roll) + ",";
-  s += String(msg.pitch) + ",";
-  s += String(msg.heading) + ",";
-  s += String(msg.altitude);
-
-  return s;
-}
-
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   // Copy the data over to the local carData struct
   memcpy(&carData, incomingData, sizeof(carData));
 
-  // Pass the data to the pi
-  Serial.print("$DATA,");
-  Serial.println(packetToString(carData));
+  // Create a json document with all the data
+  JsonDocument doc;
+  doc["timestamp"] = carData.timestamp;
+  doc["ampHrs"] = carData.ampHrs;
+  doc["voltage"] = carData.voltage;
+  doc["current"] = carData.current;
+  doc["speed"] = carData.speed;
+  doc["miles"] = carData.miles;
+  doc["fix"] = carData.fix;
+  doc["gpsX"] = carData.gpsX;
+  doc["gpsY"] = carData.gpsY;
+  doc["throttle"] = carData.throttle;
+  doc["brake"] = carData.brake;
+  doc["motorTemp"] = carData.motorTemp;
+  doc["batt1"] = carData.batt1;
+  doc["batt2"] = carData.batt2;
+  doc["batt3"] = carData.batt3;
+  doc["batt4"] = carData.batt4;
+  doc["ambientTemp"] = carData.ambientTemp;
+  doc["roll"] = carData.roll;
+  doc["pitch"] = carData.pitch;
+  doc["heading"] = carData.heading;
+  doc["altitude"] = carData.altitude;
+
+  // Print the json to serial
+  String serialData;
+  serializeJson(doc, serialData);
+  Serial.println(serialData);
 }
 
 void setup() {
   // Initialize serial connection to the pi
   Serial.begin(115200);
 
-  // Enter Long range mode
+  // Wifi Mode
   WiFi.mode(WIFI_STA);
+
+  // Start wifi to set configuration
+  if (esp_wifi_start() != ESP_OK) {
+      Serial.println("WiFi start failed");
+      return;
+  }
+
+  // Set lowa data rate mode
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
+
+  // Set max power
+  esp_wifi_set_max_tx_power(80); //~20 dbm
 
   // Start ESP-NOW
   if (esp_now_init() != ESP_OK) {

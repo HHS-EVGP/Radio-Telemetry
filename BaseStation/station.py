@@ -3,7 +3,10 @@ import sqlite3
 import time
 import threading
 import serial
+import serial.tools.list_ports
 import random
+import json
+import math
 
 from frontend.webserver import app
 import sharedVars
@@ -11,8 +14,6 @@ import sharedVars
 
 # Background function to read and store data from serial
 def storeData():
-    serialHeader = "$DATA,"
-
     # Theese lines are for a random data feed during testing
     #while True:
     #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
@@ -71,53 +72,121 @@ def storeData():
 
     insert_data_sql = """
         INSERT INTO main (
-            time, throttle, brake, Motor_temp, batt_1, batt_2, batt_3, batt_4,
-            amp_hours, voltage, current, speed, miles, GPS_X, GPS_Y
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            time,
+            amp_hours, voltage, current, speed, miles,
+            gps_fix, GPS_x, GPS_y,
+            throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4,
+            ambient_temp, rool, pitch, heading, altitude, laps
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
         """
+    # laps is set to null when the data is inserted, and will be set by user input later
 
-    # Establish a serial connection
+    # Establish a serial connection to the esp32
     ser = None
     while ser is None:
         try:
-            # Try to auto-detect a USB serial device
-            for port in [f"/dev/ttyUSB{i}" for i in range(10)] + [f"/dev/ttyACM{i}" for i in range(10)]:
-                try:
-                    ser = serial.Serial(port, 115200, timeout=1)
-                    print(f"Connected to serial port on {port}")
-                    break
-                except (serial.SerialException, OSError):
-                    continue
+            # Get a list of available devices
+            ports = serial.tools.list_ports.comports()
 
-            if ser is None:
-                print("No serial device found, retrying.")
-                time.sleep(1)
+            # Look for the USB to UART Bridge that is on the esp32
+            for port in ports:
+                if "CP210" in port.description or "CH340" in port.description:
+                    serDevice = port.device
+                    ser = serial.Serial(serDevice, 115200, timeout=1)
+
         except Exception as e:
-            print("Serial connection error:", e)
+            print("Error establishing serial connection:", e)
             time.sleep(1)
 
     # Constantly read and process the serial connection
+    serDump = b''
+    serErros = 0
     while True:
         try:
             if ser.in_waiting:
-                serDump = ser.read(ser.in_waiting)
+                # Read a character
+                c = ser.read(1)
+                serDump += c
 
-                # If we don't have a complete line, read some more
-                if not serDump.endswith("\n"):
+                # If we don't have a newline, read some more
+                if c != b'\n':
                     continue
 
                 # Decode and split by lines
                 lines = serDump.decode(errors='ignore').splitlines()
                 for line in lines:
-                    if line.startswith(serialHeader):
-                        sharedVars.data = line[len(serialHeader):].split(",")
+
+                    print("\n", line, "\n")
+
+                    if line.startswith("{"):
+                        # Parse the JSON data
+                        jsonStr = line
+                        parsed_data = json.loads(jsonStr)
+
+                        # Convert the json into a list
+                        data = [
+                            parsed_data["timestamp"],
+                            parsed_data["ampHrs"],
+                            parsed_data["voltage"],
+                            parsed_data["current"],
+                            parsed_data["speed"],
+                            parsed_data["miles"],
+                            parsed_data["fix"],
+                            parsed_data["gpsX"],
+                            parsed_data["gpsY"],
+                            parsed_data["throttle"],
+                            parsed_data["brake"],
+                            parsed_data["motorTemp"],
+                            parsed_data["batt1"],
+                            parsed_data["batt2"],
+                            parsed_data["batt3"],
+                            parsed_data["batt4"],
+                            parsed_data["ambientTemp"],
+                            parsed_data["roll"],
+                            parsed_data["pitch"],
+                            parsed_data["heading"],
+                            parsed_data["altitude"]
+                        ]
+
+                        # Share the data with the webpage
+                        sharedVars.data = data
+
+                        # Reset the serial dump
+                        serDump = b'';
+
+                        # Exclude the data from the database if there is no timestamp
+                        if math.isnan(data[0]):
+                            print("No timestamp for packet!")
+                            continue
 
                         # Insert into database
-                        cur.execute(insert_data_sql, sharedVars.data)
+                        cur.execute(insert_data_sql, data)
+
+                    # If we got trash data, throw an error
+                    else:
+                        raise ValueError(f"Invalid data received: {line}")
+
 
         except Exception as e:
-            print("Serial read error:", e)
-            time.sleep(1)
+            print("Data store error:", e)
+
+            # Restart the serial connection after 5 errors
+            serErros += 1
+            if serErros >= 5:
+                print("Restarting Serial Connection!")
+
+                # Disconnect and reconnect the serial
+                try:
+                    serDump = b'';
+                    ser.close()
+
+                    time.sleep(0.1)
+                    ser = serial.Serial(serDevice, 115200, timeout=1)
+                except Exception as e:
+                    print("Error reestablishing serial connection:", e)
+
+                serErros = 0
+            time.sleep(0.1)
 
 
 # Start the background thread to get data from serial

@@ -13,8 +13,10 @@ The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run r
 To programm the ESP32 in the Car we use Arduino IDE with the following libraries:
 - `7Semi-ADS1xx5`
 - `Adaruit 10DOF`
-- `Adafruit GPS Library` 
+- `Adafruit GPS Library`
 > Be sure to install all dependancies when prompted
+
+For the esp32 acting as a receiver, you need `ArduinoJson` through Arduino IDE
 
 On the Base Station, create a python virtual enviroment and install the following with pip:
 - `pyserial`

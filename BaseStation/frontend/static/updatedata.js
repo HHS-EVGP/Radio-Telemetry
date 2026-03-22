@@ -157,11 +157,6 @@ function getData() {
       if (!response.ok) throw new Error("Server offline");
       return response.json();
     })
-    .catch((err) => {
-      // Show server warning
-      document.getElementById("serverWarn").style.display = "block";
-    })
-
     .then((data) => {
       // Hide server warning since we got data
       document.getElementById("serverWarn").style.display = "none";
@@ -266,6 +261,16 @@ function getData() {
       document.getElementById("gpsX").textContent = data.gpsX ?? "NNN";
       document.getElementById("gpsY").textContent = data.gpsY ?? "NNN";
 
+      // GPS Fix
+      if (data.gpsFix == true) {
+        document.getElementById("gpsFix").textContent = "Yes";
+        document.getElementById("gpsFix").style.color = "green";
+      }
+      else {
+        document.getElementById("gpsFix").textContent = "No";
+        document.getElementById("gpsFix").style.color = "red";
+      }
+
       // Update scatter plot with new gps data
       window.gpsChart.data.datasets[0].data.push({
         x: data.gpsX,
@@ -280,9 +285,13 @@ function getData() {
         window.gpsChart.data.datasets[0].data.shift();
       }
 
+    })
+    .catch((err) => {
+      // Show server warning
+      document.getElementById("serverWarn").style.display = "block";
     });
 }
-setInterval(getData, 250); // Every 250ms
+setInterval(getData, 200); // 5hz
 
 
 // Functions to count the clock

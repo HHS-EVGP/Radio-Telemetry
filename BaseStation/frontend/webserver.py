@@ -111,7 +111,7 @@ def getData():
     return jsonify(
         # Statuses
         systime=datetime.now().strftime("%H:%M:%S"),
-        timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp is not None else None,
+        timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp / 1000)) if timestamp is not None else None,
         throttle=cleanView(throttle, 3),
         brakePedal=cleanView(brakePedal, 3),
 
