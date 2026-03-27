@@ -161,6 +161,7 @@ def storeData():
 
                         # Insert into database
                         cur.execute(insert_data_sql, data)
+                        con.commit()
 
                     # If we got trash data, throw an error
                     else:
