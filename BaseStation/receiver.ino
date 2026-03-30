@@ -5,7 +5,7 @@
 
 // Packet structure
 typedef struct struct_message {
-  uint64_t timestamp;
+  double timestamp;
 
   // CA
   float ampHrs;
@@ -45,9 +45,12 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   // Copy the data over to the local carData struct
   memcpy(&carData, incomingData, sizeof(carData));
 
+  // Convert timestamp to milliseconds to make ArduinoJson happy
+  uint64_t milliStamp = carData.timestamp * 100;
+
   // Create a json document with all the data
   JsonDocument doc;
-  doc["timestamp"] = carData.timestamp;
+  doc["timestamp"] = milliStamp;
   doc["ampHrs"] = carData.ampHrs;
   doc["voltage"] = carData.voltage;
   doc["current"] = carData.current;

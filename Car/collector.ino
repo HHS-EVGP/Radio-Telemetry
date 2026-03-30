@@ -65,7 +65,7 @@ uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
 
 // Packet structure
 typedef struct struct_message {
-  uint64_t timestamp = NAN;  // Initial value
+  double timestamp = NAN;  // Initial value
 
   // CA
   float ampHrs;
@@ -180,7 +180,7 @@ void getIMU() {
   }
 }
 
-uint64_t toUnixTimestamp(
+double toUnixTimestamp(
   int year, int month, int day,
   int hour, int minute, int seconds,
   int milliseconds) {
@@ -200,8 +200,8 @@ uint64_t toUnixTimestamp(
 
   time_t unixSec = mktime(&t);
 
-  // Return timestamp in milliseconds
-  return (uint64_t)unixSec * 1000 + milliseconds;
+  // Return timestamp in seconds
+  return (double)unixSec + (milliseconds / 1000.0f);
 }
 
 double degToRad(double deg) {

@@ -14,7 +14,7 @@ import sharedVars
 
 # Background function to read and store data from serial
 def storeData():
-    # Theese lines are for a random data feed during testing
+    # These lines are for a random data feed during testing
     #while True:
     #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
     #    time.sleep(0.25)
@@ -32,7 +32,7 @@ def storeData():
         current REAL,
         speed REAL,
         miles REAL,
-        gps_fix TEXT,
+        gps_fix INTEGER,
         GPS_x REAL,
         GPS_y REAL,
         throttle REAL,
@@ -125,7 +125,7 @@ def storeData():
 
                         # Convert the json into a list
                         data = [
-                            parsed_data["timestamp"],
+                            parsed_data["timestamp"] / 100 if parsed_data["timestamp"] != None else None, # Convert the timestamp back to seconds
                             parsed_data["ampHrs"],
                             parsed_data["voltage"],
                             parsed_data["current"],
@@ -148,14 +148,14 @@ def storeData():
                             parsed_data["altitude"]
                         ]
 
-                        # Share the data with the webpage
+                        # Share the data with the webserver
                         sharedVars.data = data
 
                         # Reset the serial dump
                         serDump = b'';
 
                         # Exclude the data from the database if there is no timestamp
-                        if math.isnan(data[0]):
+                        if data[0] == None:
                             print("No timestamp for packet!")
                             continue
 
@@ -194,7 +194,8 @@ def storeData():
 thread = threading.Thread(target=storeData, daemon=True)
 thread.start()
 
-# Start the webserver
+# Start the app for testing
 app.run(host='0.0.0.0', port=5000, debug=False)
 
+# Start the production server with waitress
 #waitress.serve(app, host='0.0.0.0', port=80, threads=8)
