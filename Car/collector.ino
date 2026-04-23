@@ -257,7 +257,7 @@ void readCA() {
   if (CA.available()) {
     char c = CA.read();
 
-    // Skip carrage returns
+    // Skip carriage returns
     if (c == '\r') return;
 
     if (c == '\n') {
@@ -271,8 +271,8 @@ void readCA() {
         Serial.println(CABuffer);
       }
 
-      // Verify that we have five |s in our message
-      if (verifyPipes(CABuffer)) {
+      // Verify that we have four tabs in our message
+      if (verifyTabs(CABuffer)) {
         haveCA = true;
       } else {
         warning("Invalid CA String");
@@ -284,11 +284,11 @@ void readCA() {
   }
 }
 
-bool verifyPipes(char *buff) {
+bool verifyTabs(char *buff) {
   int count = 0;
 
   while (*buff != '\0') {
-    if (*buff == '|') {
+    if (*buff == '\t') {
       count++;
     }
     buff++;
@@ -298,22 +298,23 @@ bool verifyPipes(char *buff) {
 }
 
 void getCA(char *caBuffer) {
-  // Input from CA is: ampHrs|voltage|current|speed|miles\n
+  // Input format:
+  // ampHrs\tvoltage\tcurrent\tspeed\tmiles
 
   // One by one, search for the | delemiter and extract the variables
-  char *value = strtok(caBuffer, "|");
+  char *value = strtok(caBuffer, "\t");
   if (value != NULL) carData.ampHrs = atof(value);
 
-  value = strtok(NULL, "|");  // Using NULL means to start where we left off
+  value = strtok(NULL, "\t"); // Using NULL means to start where we left off
   if (value != NULL) carData.voltage = atof(value);
 
-  value = strtok(NULL, "|");
+  value = strtok(NULL, "\t");
   if (value != NULL) carData.current = atof(value);
 
-  value = strtok(NULL, "|");
+  value = strtok(NULL, "\t");
   if (value != NULL) carData.speed = atof(value);
 
-  value = strtok(NULL, "|");
+  value = strtok(NULL, "\t");
   if (value != NULL) carData.miles = atof(value);
 
   // Reset haveCA
