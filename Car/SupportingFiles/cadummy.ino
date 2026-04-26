@@ -10,7 +10,7 @@ void setup() {
 
 void loop() {
   if (millis() - txTime >= 200) {
-    Serial1.println("1|2|3|4|5");
+    Serial1.println("1\t1\t3\t4\t5");
     Serial.println("'data' sent");
     txTime = millis();
   }
