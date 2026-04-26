@@ -3,4 +3,5 @@ pyenv/
 BaseStation/__pycache__
 BaseStation/frontend/__pycache__
 BaseStation/EVGPTelemetry.sqlite
+BaseStation/config.sh
 raceInfo.pkl
