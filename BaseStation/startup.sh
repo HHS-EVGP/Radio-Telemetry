@@ -1,5 +1,5 @@
 #!/bin/bash
-source config.sh # This defines IFACE, SSID, and PASSWRD
+source wifiConfig.sh # This defines IFACE, SSID, and PASSWRD
 
 # Clear any hotspot connection and create a new one
 nmcli connection delete Hotspot
