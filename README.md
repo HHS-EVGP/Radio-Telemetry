@@ -1,10 +1,12 @@
 # EVGP Data Collection and Visualization System
 
-This project is a data collection and visualization system for an electric race car using two Raspberry Pis and a CC1101 Radio module. The Pi collects data, stores it in an SQLite3 database, and transmits it to a pit station. The station stores the data in another SQLite database and visualizes it through a web interface.
+This project is a data collection and visualization system for an electric race car using two ESP32s and a computer. Data is collected, logged, transmitted over radio, and visualized in real time.
 
 ## Who Are We?
 
 The Harrisonburg High School Electric Vehicle Grand Prix team is a student-run racing team that builds an electric car and races it in an endurance race. As of 2025, we are a four-year-old team, and from the start, live data has been an important part of our race strategy.
+
+## Check out our data archive [here](https://github.com/HHS-EVGP/Data-Archive)!
 
 ## Building the System
 
@@ -35,7 +37,7 @@ An ESP32-powered data board on the car collects data from various points, logs t
     - Heading
     - Altitude
 
-Another ESP32 receives the message and passes it to a computer. The computer then hosts a webpage and wifi hotpost that provides a live dashboard of the data.
+Another ESP32 receives the message and passes it to a computer. The computer then hosts a web page and Wi-Fi hotspot that provides a live dashboard of the data.
 
 ### Assembling the PCB
 
@@ -61,7 +63,7 @@ On the Base Station, create a Python virtual environment and install the followi
 
 After the PCB is assembled, everything is wired properly, and the ESP32 is programmed, the data system should just start up once powered.
 
-The white light indicates power, the red light indicates an error, and the green light indicates a datapoint was logged.
+The white light indicates power, the red light indicates an error, and the green light indicates a data point was logged.
 
 > Note: For accurate measurements, the electrical systems of the board and the car need to share a common ground. This can be done by running a wire from the ground of the motor controller and soldering it to a ground pad of the barrel jack. A dedicated ground terminal will be added to next year's board.
 
@@ -71,7 +73,7 @@ The easiest way to get started is to clone the repository:
 
     git clone https://github.com/HHS-EVGP/Radio-Telemetry.git
 
-Next you need to set up the Python environment
+Next you need to set up the Python environment.
 
     cd Radio-Telemetry
     python -m venv env
@@ -90,8 +92,6 @@ Now the server should be running and you can go to its IP address on **port 5000
 If you are having issues connecting from another device, check your firewall rules.
 
 > Note: You only need a Linux machine here because `NetworkManager` is being used to automatically create a hotspot. If you are willing to go without a hotspot or implement it yourself, the rest of the code should work just fine on any platform with Python. Just run `station.py` with Python.
-
-## Check out our data archive [here](https://github.com/HHS-EVGP/Data-Archive)!
 
 ## Acknowledgements
 
