@@ -195,7 +195,7 @@ thread = threading.Thread(target=storeData, daemon=True)
 thread.start()
 
 # Start the app for testing
-app.run(host='0.0.0.0', port=5000, debug=False)
+#app.run(host='0.0.0.0', port=5000, debug=False)
 
 # Start the production server with waitress
-#waitress.serve(app, host='0.0.0.0', port=80, threads=8)
+waitress.serve(app, host='0.0.0.0', port=5000, threads=8)

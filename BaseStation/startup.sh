@@ -4,6 +4,11 @@
 cd "$(dirname "$0")/.."
 source BaseStation/wifiConfig.sh # This defines IFACE, SSID, and PASSWRD
 
+# You can set your own hotpost parameters here
+#SSID=""
+#PASSWRD=""
+#IFACE=""
+
 # Clear any hotspot connection and create a new one
 nmcli connection delete Hotspot
 nmcli device wifi hotspot ifname "$IFACE" ssid "$SSID" password "$PASSWRD"
