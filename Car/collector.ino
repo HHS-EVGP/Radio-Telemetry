@@ -219,7 +219,7 @@ void getGPS() {
 
     // Derive the timestamp from how long it has been since the last GPS point
     if (carData.timestamp != NAN) {  // Timestamp would be NAN if we're on our first data point
-      carData.timestamp = millis() - lastValidGPS + carData.timestamp;
+      carData.timestamp = carData.timestamp + (millis() - lastValidGPS);
     }
 
     // Set neutral values
@@ -305,7 +305,7 @@ void getCA(char *caBuffer) {
   char *value = strtok(caBuffer, "\t");
   if (value != NULL) carData.ampHrs = atof(value);
 
-  value = strtok(NULL, "\t"); // Using NULL means to start where we left off
+  value = strtok(NULL, "\t");  // Using NULL means to start where we left off
   if (value != NULL) carData.voltage = atof(value);
 
   value = strtok(NULL, "\t");
@@ -346,8 +346,9 @@ float thermistor(float value) {
 
 void getAnalog() {
   // Throttle and brake
-  carData.throttle = map(adc2.readRawCH(0), 0, 32767, 0, 1000);
-  carData.brake = map(adc2.readRawCH(1), 0, 32767, 0, 1000);
+  // The ADC goes from 0 to 32767, map values are changed to fit the sensor range
+  carData.throttle = map(adc2.readRawCH(0), 0, 21298, 0, 1000);
+  carData.brake = map(adc2.readRawCH(1), 420, 2600, 1000, 0);
 
   // Temperatures
   carData.motorTemp = thermistor(adc2.readRawCH(2));
@@ -471,12 +472,12 @@ void setup() {
   // Start CA Serial
   CA.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
 
-  // Start Seral2 for gps
+  // Start GPS serial
   Serial2.begin(9600, SERIAL_8N1, 16, 17);  // use pins 16 and 17 (EP 8 and 7)
   GPS.begin(9600);
 
   // Configure gps module
-  delay(500);                                    // Give the gps time to boot
+  delay(500);                                    // Wait for the gps to boot
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);  // Output RMC and GGA
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);     // Output at 5 hz
 
@@ -488,6 +489,10 @@ void setup() {
   initIMU();
   initSD();
   initADCs();
+
+  // Clear serial buffers
+  GPS.flush();
+  CA.flush();
 }
 
 void loop() {
