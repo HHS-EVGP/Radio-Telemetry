@@ -16,6 +16,9 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 
+// Change this to REDCAR/BLUECAR to select car settings
+#define BLUECAR
+
 #define UARTdebug true
 
 // Assign a unique ID to the IMU sensors
@@ -61,10 +64,19 @@ const float c2 = 2.378405444e-04;
 const float c3 = 2.019202697e-07;
 
 // Receiver mac address
-uint8_t broadcastAddress[] = { 0x68, 0xfe, 0x71, 0x0c, 0x84, 0x60 };
+uint8_t broadcastAddress[] = { 0x68, 0xFE, 0x71, 0x0B, 0x6D, 0x68 };
 
 // Packet structure
 typedef struct struct_message {
+
+  // Car id
+#ifdef BLUECAR
+  String id = "blue";
+#endif
+#ifdef REDCAR
+  String id = "red";
+#endif
+
   double timestamp = NAN;  // Initial value
 
   // CA
@@ -367,6 +379,7 @@ void initSD() {
 // Helper to convert a packet to a string
 String packetToString(const struct_message &msg) {
   String s = "";
+  s += String(msg.id) + ",";
   s += String(msg.timestamp) + ",";
   s += String(msg.ampHrs) + ",";
   s += String(msg.voltage) + ",";

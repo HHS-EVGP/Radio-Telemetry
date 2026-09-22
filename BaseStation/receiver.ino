@@ -5,6 +5,7 @@
 
 // Packet structure
 typedef struct struct_message {
+  String id;
   double timestamp;
 
   // CA
@@ -50,6 +51,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
   // Create a json document with all the data
   JsonDocument doc;
+  doc["id"] = carData.id;
   doc["timestamp"] = milliStamp;
   doc["ampHrs"] = carData.ampHrs;
   doc["voltage"] = carData.voltage;
@@ -91,7 +93,7 @@ void setup() {
       return;
   }
 
-  // Set lowa data rate mode
+  // Set low data rate mode
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
 
   // Set max power
