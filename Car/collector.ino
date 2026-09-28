@@ -71,10 +71,10 @@ typedef struct struct_message {
 
   // Car id
 #ifdef BLUECAR
-  String id = "blue";
+  String id = "blue-445";
 #endif
 #ifdef REDCAR
-  String id = "red";
+  String id = "red-111";
 #endif
 
   double timestamp = NAN;  // Initial value
