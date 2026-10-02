@@ -73,7 +73,7 @@ def getData():
     # Unpack the data
     timestamp, ampHrs, voltage, current, speed, miles, gpsFix, gpsX, gpsY, \
         throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
-        rool, pitch, heading, altitude = sharedVars.data
+        roll, pitch, heading, altitude = sharedVars.data
 
     # Calculate current race time
     if racing and timestamp is not None:
@@ -135,7 +135,7 @@ def getData():
         gpsFix=gpsFix,
         gpsX=cleanView(gpsX, 3),
         gpsY=cleanView(gpsY, 3),
-        rool=cleanView(rool, 3),
+        roll=cleanView(roll, 3),
         pitch=cleanView(pitch, 3),
         heading=cleanView(heading, 3),
         altitude=cleanView(altitude, 3),

@@ -252,7 +252,7 @@ function getData() {
       }
 
       // IMU
-      document.getElementById("rool").textContent = data.rool ?? "NNN";
+      document.getElementById("roll").textContent = data.roll ?? "NNN";
       document.getElementById("pitch").textContent = data.pitch ?? "NNN";
       document.getElementById("heading").textContent = data.heading ?? "NNN";
       document.getElementById("altitude").textContent = data.altitude ?? "NNN";
