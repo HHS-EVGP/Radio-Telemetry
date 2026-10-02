@@ -6,27 +6,17 @@ import serial
 import serial.tools.list_ports
 import random
 import json
-import math
 
 from frontend.webserver import app
 import sharedVars
 
+# Function to set up a db table
+def setupTable(table, con, cur):
 
-# Background function to read and store data from serial
-def storeData():
-    # These lines are for a random data feed during testing
-    #while True:
-    #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
-    #    time.sleep(0.25)
-
-    # Link the database to the python cursor
-    con = sqlite3.connect(sharedVars.DBPATH)
-    cur = con.cursor()
-
-    # If main table does not exist as a table, create it
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS main (
-        time REAL UNIQUE PRIMARY KEY,
+    # Create the table if needed
+    cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+        time REAL PRIMARY KEY,
         amp_hours REAL,
         voltage REAL,
         current REAL,
@@ -43,7 +33,7 @@ def storeData():
         batt_3 REAL,
         batt_4 REAL,
         ambient_temp REAL,
-        rool REAL,
+        roll REAL,
         pitch REAL,
         heading REAL,
         altitude REAL,
@@ -52,34 +42,57 @@ def storeData():
     """)
     con.commit()
 
-    # Find a list of days that are present in the database
-    cur.execute('''
+    # Find a list of days that are present in the table
+    cur.execute(f"""
         SELECT DISTINCT
             DATE(time, 'unixepoch') AS day
-            FROM main
+            FROM {table}
             ORDER BY day;
-    ''')
+    """)
     days = cur.fetchall()
 
-    ## Create individual views for each existing day if they do not exist
+    ## Create individual views for each day in the table
     for day in days:
         cur.execute(f"""
-        CREATE VIEW IF NOT EXISTS '{day[0]}'
-        AS SELECT * FROM main
+        CREATE VIEW IF NOT EXISTS '{table + "-" + day[0]}'
+        AS SELECT * FROM {table}
         WHERE DATE(time, 'unixepoch') = '{day[0]}';
         """)
     con.commit()
 
-    insert_data_sql = """
-        INSERT INTO main (
+
+# Fnction to insert data into a certian table
+def insertData(table, data, con, cur):
+    insert_data_sql = f"""
+        INSERT INTO {table} (
             time,
             amp_hours, voltage, current, speed, miles,
             gps_fix, GPS_x, GPS_y,
             throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4,
-            ambient_temp, rool, pitch, heading, altitude, laps
+            ambient_temp, roll, pitch, heading, altitude, laps
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
         """
-    # laps is set to null when the data is inserted, and will be set by user input later
+        # laps is set to null when the data is inserted, and will be set by user input later
+
+    # Insert the data
+    cur.execute(insert_data_sql, data)
+    con.commit()
+
+
+# Background function to read and store data from serial
+def readAndStoreData():
+    # These lines are for a random data feed during testing
+    #while True:
+    #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
+    #    time.sleep(0.25)
+
+    # Link the database to the python cursor
+    con = sqlite3.connect(sharedVars.DBPATH)
+    cur = con.cursor()
+
+    # Set up the two tables
+    setupTable("blue_445", con, cur)
+    setupTable("red_111", con, cur)
 
     # Establish a serial connection to the esp32
     ser = None
@@ -94,93 +107,86 @@ def storeData():
                     serDevice = port.device
                     ser = serial.Serial(serDevice, 115200, timeout=1)
 
+            time.sleep(1)
         except Exception as e:
             print("Error establishing serial connection:", e)
             time.sleep(1)
 
+
     # Constantly read and process the serial connection
-    serDump = b''
     serErros = 0
     while True:
         try:
-            if ser.in_waiting:
-                # Read a character
-                c = ser.read(1)
-                serDump += c
+            # Read a line from the serial
+            raw_line = ser.readline()
 
-                # If we don't have a newline, read some more
-                if c != b'\n':
+            # If we timed out, try again
+            if not raw_line:
+                continue
+
+            # Clean up the line
+            line = raw_line.decode(errors='ignore').strip()
+
+            # Ignore empty lines after cleaning
+            if not line:
+                continue
+
+            print("\n", line, "\n")
+
+            if line.startswith("{"):
+                # Parse JSON
+                parsed_data = json.loads(line)
+
+                data = [
+                    parsed_data["timestamp"] / 100 if parsed_data["timestamp"] is not None else None,
+                    parsed_data["ampHrs"],
+                    parsed_data["voltage"],
+                    parsed_data["current"],
+                    parsed_data["speed"],
+                    parsed_data["miles"],
+                    parsed_data["fix"],
+                    parsed_data["gpsX"],
+                    parsed_data["gpsY"],
+                    parsed_data["throttle"],
+                    parsed_data["brake"],
+                    parsed_data["motorTemp"],
+                    parsed_data["batt1"],
+                    parsed_data["batt2"],
+                    parsed_data["batt3"],
+                    parsed_data["batt4"],
+                    parsed_data["ambientTemp"],
+                    parsed_data["roll"],
+                    parsed_data["pitch"],
+                    parsed_data["heading"],
+                    parsed_data["altitude"]
+                ]
+
+                id = parsed_data["id"]
+
+                if id == "blue_445":
+                    sharedVars.data_blue_445 = data
+                elif id == "red_111":
+                    sharedVars.data_red_111 = data
+                else:
+                    raise ValueError(f"Invalid car id: {id}")
+
+                if data[0] is None:
+                    print("No timestamp for packet!")
                     continue
 
-                # Decode and split by lines
-                lines = serDump.decode(errors='ignore').splitlines()
-                for line in lines:
+                insertData(id, data, con, cur)
 
-                    print("\n", line, "\n")
-
-                    if line.startswith("{"):
-                        # Parse the JSON data
-                        jsonStr = line
-                        parsed_data = json.loads(jsonStr)
-
-                        # Convert the json into a list
-                        data = [
-                            parsed_data["timestamp"] / 100 if parsed_data["timestamp"] != None else None, # Convert the timestamp back to seconds
-                            parsed_data["ampHrs"],
-                            parsed_data["voltage"],
-                            parsed_data["current"],
-                            parsed_data["speed"],
-                            parsed_data["miles"],
-                            parsed_data["fix"],
-                            parsed_data["gpsX"],
-                            parsed_data["gpsY"],
-                            parsed_data["throttle"],
-                            parsed_data["brake"],
-                            parsed_data["motorTemp"],
-                            parsed_data["batt1"],
-                            parsed_data["batt2"],
-                            parsed_data["batt3"],
-                            parsed_data["batt4"],
-                            parsed_data["ambientTemp"],
-                            parsed_data["roll"],
-                            parsed_data["pitch"],
-                            parsed_data["heading"],
-                            parsed_data["altitude"]
-                        ]
-
-                        # Share the data with the webserver
-                        sharedVars.data = data
-
-                        # Reset the serial dump
-                        serDump = b'';
-
-                        # Exclude the data from the database if there is no timestamp
-                        if data[0] == None:
-                            print("No timestamp for packet!")
-                            continue
-
-                        # Insert into database
-                        cur.execute(insert_data_sql, data)
-                        con.commit()
-
-                    # If we got trash data, throw an error
-                    else:
-                        raise ValueError(f"Invalid data received: {line}")
-
+            else:
+                raise ValueError(f"Invalid data received: {line}")
 
         except Exception as e:
             print("Data store error:", e)
 
-            # Restart the serial connection after 5 errors
             serErros += 1
             if serErros >= 5:
                 print("Restarting Serial Connection!")
-
-                # Disconnect and reconnect the serial
                 try:
-                    serDump = b'';
                     ser.close()
-
                     time.sleep(0.1)
                     ser = serial.Serial(serDevice, 115200, timeout=1)
                 except Exception as e:
@@ -189,9 +195,8 @@ def storeData():
                 serErros = 0
             time.sleep(0.1)
 
-
 # Start the background thread to get data from serial
-thread = threading.Thread(target=storeData, daemon=True)
+thread = threading.Thread(target=readAndStoreData, daemon=True)
 thread.start()
 
 # Start the app for testing
