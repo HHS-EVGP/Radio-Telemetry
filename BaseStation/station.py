@@ -82,9 +82,10 @@ def insertData(table, data, con, cur):
 # Background function to read and store data from serial
 def readAndStoreData():
     # These lines are for a random data feed during testing
-    #while True:
-    #    sharedVars.data = [time.time()] + [random.uniform(0, 100) for i in range(20)]
-    #    time.sleep(0.25)
+    while True:
+        sharedVars.data_blue_445 = [time.time()] + [random.uniform(0, 100) for i in range(20)]
+        sharedVars.data_blue_111 = [time.time()] + [random.uniform(0, 100) for i in range(20)]
+        time.sleep(0.25)
 
     # Link the database to the python cursor
     con = sqlite3.connect(sharedVars.DBPATH)
@@ -200,7 +201,7 @@ thread = threading.Thread(target=readAndStoreData, daemon=True)
 thread.start()
 
 # Start the app for testing
-#app.run(host='0.0.0.0', port=5000, debug=False)
+app.run(host='0.0.0.0', port=5000, debug=False)
 
 # Start the production server with waitress
-waitress.serve(app, host='0.0.0.0', port=5000, threads=8)
+#waitress.serve(app, host='0.0.0.0', port=5000, threads=8)

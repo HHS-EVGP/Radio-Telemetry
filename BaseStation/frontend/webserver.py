@@ -1,10 +1,13 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import sqlite3
 from datetime import datetime
 import time
 
 import pickle
 import os
+import json
+import queue
+import threading
 
 app = Flask(__name__)
 
@@ -65,42 +68,74 @@ def cleanView(var, lenth):
 # Attach cleanView to the Flask app
 app.cleanView = cleanView
 
-# Page to serve a json with data
-@app.route("/getdata")
-def getData():
-    global data, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
 
-    # Unpack the data
+# SSE client subscribers
+_client_listeners = set()
+_client_lock = threading.Lock()
+
+
+def add_client_listener(client_queue, remote_addr):
+    with _client_lock:
+        _client_listeners.add((client_queue, remote_addr))
+
+
+def remove_client_listener(client_queue):
+    with _client_lock:
+        to_remove = [item for item in _client_listeners if item[0] is client_queue]
+        for item in to_remove:
+            _client_listeners.remove(item)
+
+
+def broadcast_to_clients(payload_maker):
+    with _client_lock:
+        subscribers = list(_client_listeners)
+    for client_queue, remote_addr in subscribers:
+        try:
+            is_authed = remote_addr in authedUsrs
+            payload = payload_maker(is_authed)
+            client_queue.put_nowait(payload)
+        except queue.Full:
+            pass
+        except Exception as e:
+            print("Error dispatching SSE to client queue:", e)
+
+
+def format_telemetry(raw_data, car_id=None, authed=False):
+    global laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, pausedTime, endAmpHrs, paused
+
+    if not raw_data or len(raw_data) < 21:
+        raw_data = [None] * 21
+
     timestamp, ampHrs, voltage, current, speed, miles, gpsFix, gpsX, gpsY, \
         throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
-        roll, pitch, heading, altitude = sharedVars.data
+        roll, pitch, heading, altitude = raw_data[:21]
 
     # Calculate current race time
-    if racing and timestamp is not None:
-        raceTime = timestamp - whenRaceStarted - pausedTime
+    if racing and timestamp is not None and whenRaceStarted is not None:
+        calcRaceTime = timestamp - whenRaceStarted - pausedTime
 
         # Calculate racetime_minutes if needed
-        if raceTime >= 60:
-            raceTimeMinutes = raceTime // 60
-            raceTime = raceTime - raceTimeMinutes * 60
+        if calcRaceTime >= 60:
+            raceTimeMinutes = calcRaceTime // 60
+            calcRaceTime = calcRaceTime - raceTimeMinutes * 60
 
             # Convert racetime minutes to M:
-            raceTimeMinutes = str(format(raceTimeMinutes, ".0f"))+":"
+            raceTimeMinutes = str(format(raceTimeMinutes, ".0f")) + ":"
+        else:
+            raceTimeMinutes = ""
 
         # Format racetime
-        if raceTime < 10 and raceTimeMinutes is not None:
-            raceTime = format(raceTime, ".1f")
-            raceTime = "0"+str(raceTime)
+        if calcRaceTime < 10 and raceTimeMinutes != "":
+            raceTime = "0" + str(format(calcRaceTime, ".1f"))
         else:
-            raceTime = format(raceTime, ".1f")
+            raceTime = format(calcRaceTime, ".1f")
 
     # Calculate current lap time
-    if racing and timestamp is not None:
+    if racing and timestamp is not None and whenRaceStarted is not None:
         lapTime = timestamp - whenRaceStarted - sum(prevLapTimes) - pausedTime
 
     # Estimate total amp hours that will be used in the race
-    if racing and ampHrs is not None and timestamp is not None \
-    or paused and ampHrs is not None and timestamp is not None:
+    if ((racing or paused) and ampHrs is not None and timestamp is not None and whenRaceStarted is not None):
         rawRaceTime = timestamp - whenRaceStarted - pausedTime
 
         # Formula derived from amp_hours/rawRacetime = endAmphrs/3600
@@ -108,49 +143,137 @@ def getData():
         if rawRaceTime != 0:
             endAmpHrs = ampHrs * (3600 / rawRaceTime)
 
-    return jsonify(
+    formatted_timestamp = None
+    if timestamp is not None:
+        try:
+            formatted_timestamp = time.strftime("%H:%M:%S", time.localtime(timestamp))
+        except Exception:
+            formatted_timestamp = str(timestamp)
+
+    last_lap_time = None
+    if len(prevLapTimes) != 0:
+        try:
+            last_lap_time = cleanView(float(prevLapTimes[-1]), 1)
+        except (ValueError, TypeError):
+            last_lap_time = None
+
+    fastest_lap_time = None
+    if len(prevLapTimes) != 0:
+        try:
+            fastest_lap_time = cleanView(float(min(prevLapTimes)), 1)
+        except (ValueError, TypeError):
+            fastest_lap_time = None
+
+    return {
         # Statuses
-        systime=datetime.now().strftime("%H:%M:%S"),
-        timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp is not None else None,
-        throttle=cleanView(throttle, 3),
-        brakePedal=cleanView(brakePedal, 3),
+        "systime": datetime.now().strftime("%H:%M:%S"),
+        "timestamp": formatted_timestamp,
+        "carId": car_id,
+        "throttle": cleanView(throttle, 3),
+        "brakePedal": cleanView(brakePedal, 3),
 
         # Temps
-        motorTemp=cleanView(motorTemp, 3),
-        batt1=cleanView(batt1, 3),
-        batt2=cleanView(batt2, 3),
-        batt3=cleanView(batt3, 3),
-        batt4=cleanView(batt4, 3),
-        ambientTemp=cleanView(ambientTemp, 3),
+        "motorTemp": cleanView(motorTemp, 3),
+        "batt1": cleanView(batt1, 3),
+        "batt2": cleanView(batt2, 3),
+        "batt3": cleanView(batt3, 3),
+        "batt4": cleanView(batt4, 3),
+        "ambientTemp": cleanView(ambientTemp, 3),
 
         # CA
-        ampHrs=cleanView(ampHrs, 3),
-        endAmpHrs=cleanView(endAmpHrs, 3),
-        voltage=cleanView(voltage, 3),
-        current=cleanView(current, 3),
-        speed=cleanView(speed, 3),
-        miles=cleanView(miles, 3),
+        "ampHrs": cleanView(ampHrs, 3),
+        "endAmpHrs": cleanView(endAmpHrs, 3),
+        "voltage": cleanView(voltage, 3),
+        "current": cleanView(current, 3),
+        "speed": cleanView(speed, 3),
+        "miles": cleanView(miles, 3),
 
         # Position
-        gpsFix=gpsFix,
-        gpsX=cleanView(gpsX, 3),
-        gpsY=cleanView(gpsY, 3),
-        roll=cleanView(roll, 3),
-        pitch=cleanView(pitch, 3),
-        heading=cleanView(heading, 3),
-        altitude=cleanView(altitude, 3),
+        "gpsFix": bool(gpsFix) if gpsFix is not None else None,
+        "gpsX": cleanView(gpsX, 3),
+        "gpsY": cleanView(gpsY, 3),
+        "roll": cleanView(roll, 3),
+        "pitch": cleanView(pitch, 3),
+        "heading": cleanView(heading, 3),
+        "altitude": cleanView(altitude, 3),
 
         # Race info
-        laps=laps,
-        lapTime=cleanView(lapTime, 1),
-        lastLapTime=cleanView(float(prevLapTimes[-1]), 1) if len(prevLapTimes) != 0 else None,
-        fastestLapTime=cleanView(float(min(prevLapTimes)), 1) if len(prevLapTimes) != 0 else None,
-        raceTime=raceTime,
-        raceTimeMinutes=raceTimeMinutes,
-        racing=racing,
-        paused=paused,
-        authed=True if request.remote_addr in authedUsrs else False
+        "laps": laps,
+        "lapTime": cleanView(lapTime, 1),
+        "lastLapTime": last_lap_time,
+        "fastestLapTime": fastest_lap_time,
+        "raceTime": raceTime,
+        "raceTimeMinutes": raceTimeMinutes,
+        "racing": racing,
+        "paused": paused,
+        "authed": authed
+    }
+
+
+def broadcast_current_state():
+    current_data = getattr(sharedVars, "data", [None] * 21)
+    car_id = getattr(sharedVars, "latest_car_id", "blue_445")
+    broadcast_to_clients(lambda authed: format_telemetry(current_data, car_id=car_id, authed=authed))
+
+
+def on_telemetry_stream(car_id, data_point):
+    broadcast_to_clients(lambda authed: format_telemetry(data_point, car_id=car_id, authed=authed))
+
+
+# Subscribe to data points stream from station.py via sharedVars
+sharedVars.add_listener(on_telemetry_stream)
+
+
+# Server-Sent Events endpoint to stream data points to clients
+@app.route("/stream")
+@app.route("/events")
+def sse_stream():
+    client_queue = queue.Queue(maxsize=100)
+    remote_addr = request.remote_addr
+    is_authed = remote_addr in authedUsrs
+
+    # Immediately queue current state for newly connected client
+    current_data = getattr(sharedVars, "data", [None] * 21)
+    car_id = getattr(sharedVars, "latest_car_id", "blue_445")
+    try:
+        initial_payload = format_telemetry(current_data, car_id=car_id, authed=is_authed)
+        client_queue.put_nowait(initial_payload)
+    except Exception as e:
+        print("Error enqueueing initial state:", e)
+
+    add_client_listener(client_queue, remote_addr)
+
+    def event_stream():
+        try:
+            while True:
+                try:
+                    payload = client_queue.get(timeout=15)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except queue.Empty:
+                    # Keepalive comment to prevent timeouts
+                    yield ": keepalive\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            remove_client_listener(client_queue)
+
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
     )
+
+
+# Page to serve a json with data (kept for backwards compatibility)
+@app.route("/getdata")
+def getData():
+    current_data = getattr(sharedVars, "data", [None] * 21)
+    car_id = getattr(sharedVars, "latest_car_id", "blue_445")
+    is_authed = request.remote_addr in authedUsrs
+    return jsonify(format_telemetry(current_data, car_id=car_id, authed=is_authed))
 
 
 # Respond to an authentication attempt
@@ -162,6 +285,7 @@ def usrAuth():
     if authAttempt == AUTHCODE:
         if request.remote_addr not in authedUsrs:
             authedUsrs.append(request.remote_addr)
+        broadcast_current_state()
         return ('', 200)
     else:
         return ('Invalid authentication code', 401)
@@ -181,14 +305,46 @@ def usrUpdate():
     if not command:
         return 'No variable update command', 400
 
-    con = sqlite3.connect(sharedVars.DBPATH)
-    cur = con.cursor()
+    def update_db_laps(new_laps_val, condition_laps=None):
+        db_paths = [
+            sharedVars.DBPATH,
+            os.path.join(os.path.dirname(__file__), "..", "EVGPTelemetry.sqlite"),
+            "EVGPTelemetry.sqlite"
+        ]
+        con = None
+        for p in db_paths:
+            try:
+                parent = os.path.dirname(p)
+                if parent and not os.path.exists(parent):
+                    continue
+                con = sqlite3.connect(p)
+                break
+            except Exception:
+                continue
+
+        if con is None:
+            return
+
+        try:
+            cur = con.cursor()
+            for table in ["blue_445", "red_111", "main"]:
+                try:
+                    if condition_laps is None:
+                        cur.execute(f"UPDATE {table} SET laps = ? WHERE time > ? AND laps IS NULL", [new_laps_val, whenRaceStarted])
+                    else:
+                        cur.execute(f"UPDATE {table} SET laps = ? WHERE time > ? AND laps = ?", [new_laps_val, whenRaceStarted, condition_laps])
+                    con.commit()
+                except sqlite3.OperationalError:
+                    pass
+        finally:
+            con.close()
+
+    latest_data = getattr(sharedVars, "data", [None] * 21)
+    timestamp = latest_data[0] if latest_data else None
 
     if command == 'lap+' and racing:
         # Store the previous lap number in the database
-        cur.execute("UPDATE main SET laps = ? WHERE time > ? AND laps IS NULL"
-        ,[laps, whenRaceStarted])
-        con.commit()
+        update_db_laps(laps)
 
         # Increment the lap number
         laps += 1
@@ -203,25 +359,24 @@ def usrUpdate():
             'when_race_started': whenRaceStarted,
             'paused_time': pausedTime,
             'when_paused': whenPaused
-            }
+        }
 
         with open("raceInfo.pkl", "wb") as file:
             pickle.dump(raceInfo, file)
 
+        broadcast_current_state()
         return ('Play Sound', 200)
 
     elif command == 'lap-' and racing:
-
         if laps > 0:
             # Remove all instances of the lap count
-            cur.execute("UPDATE main SET laps = NULL WHERE time > ? AND laps = ?"
-                        ,(whenRaceStarted, laps,))
-            con.commit()
+            update_db_laps(None, condition_laps=laps)
 
             laps -= 1
 
             # Remove the previous lap time from the list
-            prevLapTimes.pop()
+            if len(prevLapTimes) > 0:
+                prevLapTimes.pop()
 
             # Update file dump
             raceInfo = {
@@ -230,11 +385,12 @@ def usrUpdate():
                 'when_race_started': whenRaceStarted,
                 'paused_time': pausedTime,
                 'when_paused': whenPaused
-                }
+            }
 
             with open("raceInfo.pkl", "wb") as file:
                 pickle.dump(raceInfo, file)
 
+        broadcast_current_state()
         return ('', 200)
 
     elif command == 'pauseunpause':
@@ -244,14 +400,12 @@ def usrUpdate():
         if not paused:
             paused = True
             racing = False
-
             whenPaused = timestamp
-
         else:
             paused = False
             racing = True
-
-            pausedTime += timestamp - whenPaused
+            if timestamp is not None and whenPaused is not None:
+                pausedTime += timestamp - whenPaused
             whenPaused = None
 
         # Update file dump
@@ -261,11 +415,12 @@ def usrUpdate():
             'when_race_started': whenRaceStarted,
             'paused_time': pausedTime,
             'when_paused': whenPaused
-            }
+        }
 
         with open("raceInfo.pkl", "wb") as file:
             pickle.dump(raceInfo, file)
 
+        broadcast_current_state()
         return ('', 200)
 
     elif command == 'togglerace':
@@ -287,18 +442,15 @@ def usrUpdate():
             with open("raceInfo.pkl", "wb") as file:
                 pickle.dump(None, file)
 
+            broadcast_current_state()
             return ('', 200)
 
         else:
-
             # Tie whenRaceStarted to the current timestamp
             whenRaceStarted = timestamp
 
-            #cur.execute("SELECT MAX(time) FROM main")
-            #whenRaceStarted = cur.fetchone()[0]
-
             # If we don't have a current value, return an error
-            if whenRaceStarted == None:
+            if whenRaceStarted is None:
                 return ("No data! Unable to start race", 422)
 
             # Initiate laps
@@ -311,13 +463,13 @@ def usrUpdate():
                 'when_race_started': whenRaceStarted,
                 'paused_time': pausedTime,
                 'when_paused': whenPaused
-                }
+            }
 
             with open("raceInfo.pkl", "wb") as file:
                 pickle.dump(raceInfo, file)
 
             racing = True
-
+            broadcast_current_state()
             return ('', 200)
 
     else:

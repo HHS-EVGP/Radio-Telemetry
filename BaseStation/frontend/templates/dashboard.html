@@ -8,197 +8,90 @@
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.png') }}">
   <title>HHS EVGP Live Data</title>
 
-  <!--Boostrap and chartjs-->
-  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='chart.js') }}"></script>
-
-  <!--Custom Stuff-->
-  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <script src="{{ url_for('static', filename='updatedata.js') }}"></script>
   <audio id="lapSound" src="{{ url_for('static', filename='lapsound.mp3') }}"></audio>
-
 </head>
 
-
 <body>
-  <!--Server Error/Offline Warning-->
-  <div id="serverWarn">
-    <p style="margin-top: 0.5vh;">Server is Offline or has Internal Error!!!</p>
+  <div id="serverWarn" style="display: none;">
+    Server is Offline or has Internal Error!
   </div>
 
-  <div id="outer" class="container-fluid text-center">
-    <div class="row">
+  <h1>EVGP Telemetry Dashboard</h1>
 
-      <div class="col-lg" style="padding-left: 0; padding-right: 0;">
+  <section>
+    <h2>Statuses</h2>
+    <p>Car ID: <span id="carId">NNN</span></p>
+    <p>Server Time: <span id="sysTime">NNN</span></p>
+    <p>Timestamp: <span id="timeStamp">NNN</span></p>
+    <p>Throttle: <span id="throttle">NNN</span></p>
+    <p>Brake Pedal: <span id="brakePedal">NNN</span></p>
+  </section>
 
-        <div class="block halfblk d-flex flex-column justify-content-center">
+  <section>
+    <h2>Temperatures</h2>
+    <p>Motor: <span id="motorTemp">NNN</span> °C</p>
+    <p>Battery 1: <span id="batt1">NNN</span> °C</p>
+    <p>Battery 2: <span id="batt2">NNN</span> °C</p>
+    <p>Battery 3: <span id="batt3">NNN</span> °C</p>
+    <p>Battery 4: <span id="batt4">NNN</span> °C</p>
+    <p>Ambient: <span id="ambientTemp">NNN</span> °C</p>
+  </section>
 
-          <p class="heading">Statuses</p>
-          <p>Server Time: <span class="data" id="sysTime"></span></p>
-          <p>Timestamp: <span class="data" id="timeStamp"></span></p>
+  <section>
+    <h2>Electrical & Performance</h2>
+    <p>Amp Hours: <span id="ampHours">NNN.NNN</span></p>
+    <p>Estimated End Amp Hours: <span id="estEndAhs">NNN.NNN</span></p>
+    <p>Voltage: <span id="voltage">NNN</span> V</p>
+    <p>Current: <span id="current">NNN</span> A</p>
+    <p>Speed: <span id="speed">NNN</span> mph</p>
+    <p>Miles: <span id="miles">NNN.NNN</span></p>
+  </section>
 
-          <div>
-            <canvas id="throttleBrakeChart" width="100%" height="150%"></canvas>
-          </div>
-          <br>
+  <section>
+    <h2>Timing & Laps</h2>
+    <p>Race Time: <span id="raceTimeMinutes"></span><span id="raceTime">NNN</span></p>
+    <p>Laps: <span id="laps">NN</span></p>
+    <p>Lap Time: <span id="lapTime">NNN</span> s</p>
+    <p>Last Lap Time: <span id="lastLapTime">NNN</span> s</p>
+    <p>Fastest Lap Time: <span id="fastestLapTime">NNN</span> s</p>
+  </section>
 
-        </div>
+  <section>
+    <h2>IMU</h2>
+    <p>Roll: <span id="roll">NNN</span>°</p>
+    <p>Pitch: <span id="pitch">NNN</span>°</p>
+    <p>Heading: <span id="heading">NNN</span>°</p>
+    <p>Altitude: <span id="altitude">NNN</span> m</p>
+  </section>
 
-        <div class="block halfblk d-flex flex-column justify-content-center" style="margin-top: 1em;">
+  <section>
+    <h2>GPS</h2>
+    <p>Fix: <span id="gpsFix">NNN</span></p>
+    <p>GPS X: <span id="gpsX">NNN</span> m</p>
+    <p>GPS Y: <span id="gpsY">NNN</span> m</p>
+  </section>
 
-          <p class="heading">Temperatures</p>
-          <p>Motor: <span class="data" id="motorTemp"></span>°c</p>
-          <p>Battery 1: <span class="data" id="batt1"></span>°c</p>
-          <p>Battery 2: <span class="data" id="batt2"></span>°c</p>
-          <p>Battery 3: <span class="data" id="batt3"></span>°c</p>
-          <p>Battery 4: <span class="data" id="batt4"></span>°c</p>
-          <p>Ambient <span class="data" id="ambientTemp"></span>°c</p>
-
-        </div>
-
-      </div>
-
-
-      <div class="block col-lg d-flex flex-column justify-content-center" style="text-align: center;">
-
-        <div class="bordered">
-          <p class="bignum data" id="ampHours"></p>
-          <p style="font-style: italic;">Est. End: <span class="data" id="estEndAhs"></span></p>
-          <p>Amp Hours</p>
-        </div>
-
-        <br>
-        <p>Current: <span class="data" id="current"></span>a</p>
-        <p>Voltage: <span class="data" id="voltage"></span>v</p>
-        <br>
-
-        <div class="bordered">
-          <p class="bignum data" id="miles"></p>
-          <p>Miles</p>
-        </div>
-
-        <br>
-        <p>Speed: <span class="data" id="speed"></span>mph</p>
-        <br>
-
-        <div class="bordered">
-          <p class="bignum data">
-            <span id="raceTimeMinutes"></span><span id="raceTime"></span>
-          </p>
-          <p>Race Time</p>
-        </div>
-
-        <br>
-
-      </div>
-
-
-      <div class="block col-lg d-flex flex-column justify-content-center">
-
-        <p class="heading">GPS</p>
-        <p>X: <span class="data" id="gpsX"></span>m</p>
-        <p>Y: <span class="data" id="gpsY"></span>m</p>
-        <p>Fix: <span class="data" id="gpsFix"></span></p>
-
-        <p class="heading">IMU</p>
-        <p>Roll <span class="data" id="roll"></span>°</p>
-        <p>Pitch <span class="data" id="pitch"></span>°</p>
-        <p>Heading <span class="data" id="heading"></span>°</p>
-        <p>ALT <span class="data" id="altitude"></span>m</p>
-
-        <div>
-          <!--This specific width and heigt give its column about the same height as the center column-->
-          <canvas id="gpsplot" width="100%" height="300%"></canvas>
-        </div>
-
-        <!--Button to authenticate lap controls-->
-        <span id="authLapControls">
-          <button data-bs-toggle="modal" data-bs-target="#lapAuthModal">
-            Authenticate Lap Controls
-          </button>
-        </span>
-
-        <!--Lap controls to be shown when acess code entered-->
-        <span id="lapControls">
-          <button onclick="updateServerVariable('lap-')">Lap-</button>
-          <button onclick="updateServerVariable('lap+')">Lap+</button>
-          <button id="paused" onclick="updateServerVariable('pauseunpause')">Pause</button>
-          <button id="racing" data-bs-toggle="modal" data-bs-target="#startStopModal">Start Race</button>
-        </span>
-        <p style="font-size: 1em; color: red;" id="noDataWarn">No data! Unable to start race.</p>
-
-        <div class="bordered">
-          <p>Laps: <span id="laps" class="data"></span></p>
-          <p>Lap Time: <span id="lapTime" class="data"></span>s</p>
-          <p>Last Lap Time: <span id="lastLapTime" class="data"></span>s</p>
-          <p>Fastest Lap Time <span id="fastestLapTime" class="data"></span>s</p>
-        </div>
-
-      </div>
-
+  <section>
+    <h2>Controls</h2>
+    <div id="authLapControls">
+      <form id="lapAuthForm" onsubmit="authenticateLapControls(document.getElementById('accessCode').value); return false;">
+        <label for="accessCode">Enter Access Code:</label>
+        <input type="text" id="accessCode" name="accessCode" required>
+        <button type="submit">Authenticate</button>
+      </form>
+      <p id="authError" style="color: red; display: none;">Incorrect Access Code</p>
     </div>
-  </div>
 
-
-  <!--Modal to authenticate lapt controls-->
-  <div class="modal fade" id="lapAuthModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark text-white">
-        <div class="modal-header border-secondary">
-
-          <h1 class="modal-title fs-5">Enable lap controls?</h1>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cancel"></button>
-        </div>
-
-        <div class="modal-body text-start">
-          The number of laps and lap time are stored on the server, and are visible to everyone, but can be
-          changed by
-          you if you
-          authenticate. <br><br>
-          Be sure to designate one person per team to be in charge of counting laps, as the lap information is
-          synced across all devices.
-          <br><br>
-          <form id="lapAuthForm" onsubmit="authenticateLapControls(code); return false;">
-            <label for="accessCode">Enter Access Code:</label>
-            <input type="text" id="accessCode" name="accessCode" required oninput="code = this.value"
-              class="form-control bg-dark text-white border-secondary">
-            <div style="color: red;" id="authError">Incorrect Access Code</div>
-
-        </div>
-        <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" data-bs-dismiss="modal" class="btn btn-primary">Authenticate</button>
-          </form>
-        </div>
-      </div>
+    <div id="lapControls" style="display: none;">
+      <button onclick="updateServerVariable('lap-')">Lap-</button>
+      <button onclick="updateServerVariable('lap+')">Lap+</button>
+      <button id="paused" onclick="updateServerVariable('pauseunpause')">Pause</button>
+      <button id="racing" onclick="updateServerVariable('togglerace')">Start Race</button>
+      <span id="startOrStop" style="display: none;">start a</span>
     </div>
-  </div>
-
-  <!--Modal to confirm race start/stop-->
-  <div class="modal fade" id="startStopModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark text-white">
-        <div class="modal-header border-secondary">
-
-          <h1 class="modal-title fs-5" id="exampleModalLabel">Toggle Race?</h1>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cancel"></button>
-        </div>
-
-        <div class="modal-body text-start">
-          Are you sure you want to <span id='startOrStop'></span> race?
-        </div>
-
-        <div class="modal-footer border-secondary">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">No</button>
-          <button onclick="updateServerVariable('togglerace')" data-bs-dismiss="modal"
-            class="btn btn-primary">Yes</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
+    <p id="noDataWarn" style="display: none; color: red;">No data! Unable to start race.</p>
+  </section>
 </body>
 
 </html>
