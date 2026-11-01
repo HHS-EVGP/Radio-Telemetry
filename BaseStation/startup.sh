@@ -13,8 +13,19 @@ source BaseStation/wifiConfig.sh # This defines IFACE, SSID, and PASSWRD
 nmcli connection delete Hotspot
 nmcli device wifi hotspot ifname "$IFACE" ssid "$SSID" password "$PASSWRD"
 
-# Start the server
-./pyenv/bin/python BaseStation/station.py
+
+# Activate the python enviroment
+source ./pyenv/bin/activate
+
+# Start the redis server if needed
+if [ "$(redis-cli ping)" != "PONG" ]; then
+	redis-server --daemonize yes
+fi
+
+# Start the webserver and station.py
+gunicorn -k gevent -w 2 --worker-connections 1000 BaseStation.frontend.webserver:app -b 0.0.0.0:5000 &
+python BaseStation/station.py
+
 
 # Stop the hotspot when the script ends
 trap '

@@ -16,13 +16,13 @@ An ESP32-powered data board on the car collects data from various points, logs t
 
 #### Points of Data Collected
 - Serial output from the Cycle Analyst
-    - Amp Hours
+    - Amp-hours
     - Voltage
     - Current
     - Speed
     - Distance
 - Adafruit Featherwing GPS (Mercator projection)
-    - GPS Fix
+    - GPS fix
     - GPS X
     - GPS Y
 - Analog Readings
@@ -47,7 +47,7 @@ Published PCB designs with instructions are coming soon. If you are interested i
 
 ### Software Requirements
 
-To program both ESP32s you need the Arduino IDE with the following libraries:
+To program both ESP32s, you need the Arduino IDE with the following libraries:
 - `7Semi-ADS1xx5`
 - `Adafruit 10DOF`
 - `Adafruit GPS Library`
@@ -57,7 +57,14 @@ To program both ESP32s you need the Arduino IDE with the following libraries:
 On the Base Station, create a Python virtual environment and install the following with pip:
 - `pyserial`
 - `flask`
-- `waitress`
+- `flask-sse`
+- `redis`
+- `gevent`
+- `gunicorn`
+
+Additionally, you need to install Redis with apt:
+
+    sudo apt install redis
 
 ### Starting the car
 
@@ -79,19 +86,24 @@ Next you need to set up the Python environment.
     python -m venv env
     source env/bin/activate
 
-At this point, if you are using Linux, you can simply run the startup script. Make sure that you specify your hotspot information in the script and plug the programmed receiver ESP32 in.
+At this point, if you are using Linux, you can simply run the startup script. Make sure that you specify your hotspot information in the script and plug in the programmed receiver ESP32.
 
     BaseStation/startup.sh
 
-Now the server should be running and you can go to its IP address on **port 5000** in a web browser. Some example addresses include:
+Now the server should be running, and you can go to its IP address on **port 5000** in a web browser. Some example addresses include:
 
 - `127.0.0.1:5000` (localhost)
 - `10.42.0.1:5000` (default NetworkManager hotspot IP)
 - `192.168.0.143:5000`
 
-If you are having issues connecting from another device, check your firewall rules.
+If you have issues connecting from another device, check your firewall rules.
 
-> Note: You only need a Linux machine here because `NetworkManager` is being used to automatically create a hotspot. If you are willing to go without a hotspot or implement it yourself, the rest of the code should work just fine on any platform with Python. Just run `station.py` with Python.
+### Running on other platforms
+This system has only been tested on Linux Mint 22.3 (based on Ubuntu 24.04), but it should, in theory, work on any platform as long as you install all the aforementioned dependencies and do not use the startup script. For reference, here is what the startup script does:
+
+- Creates a Wi-Fi hotspot using NetworkManager (this can be done through most system settings or skipped)
+- Starts the Redis server (you will have to figure out how to install this on your own)
+- Starts the web server and station Python programs (if you have a properly set up virtual environment, this should just work)
 
 ## Acknowledgements
 

@@ -9,7 +9,6 @@
   <title>HHS EVGP Live Data</title>
 
   <script src="{{ url_for('static', filename='updatedata.js') }}"></script>
-  <audio id="lapSound" src="{{ url_for('static', filename='lapsound.mp3') }}"></audio>
 </head>
 
 <body>
@@ -70,27 +69,6 @@
     <p>Fix: <span id="gpsFix">NNN</span></p>
     <p>GPS X: <span id="gpsX">NNN</span> m</p>
     <p>GPS Y: <span id="gpsY">NNN</span> m</p>
-  </section>
-
-  <section>
-    <h2>Controls</h2>
-    <div id="authLapControls">
-      <form id="lapAuthForm" onsubmit="authenticateLapControls(document.getElementById('accessCode').value); return false;">
-        <label for="accessCode">Enter Access Code:</label>
-        <input type="text" id="accessCode" name="accessCode" required>
-        <button type="submit">Authenticate</button>
-      </form>
-      <p id="authError" style="color: red; display: none;">Incorrect Access Code</p>
-    </div>
-
-    <div id="lapControls" style="display: none;">
-      <button onclick="updateServerVariable('lap-')">Lap-</button>
-      <button onclick="updateServerVariable('lap+')">Lap+</button>
-      <button id="paused" onclick="updateServerVariable('pauseunpause')">Pause</button>
-      <button id="racing" onclick="updateServerVariable('togglerace')">Start Race</button>
-      <span id="startOrStop" style="display: none;">start a</span>
-    </div>
-    <p id="noDataWarn" style="display: none; color: red;">No data! Unable to start race.</p>
   </section>
 </body>
 

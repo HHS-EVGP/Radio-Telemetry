@@ -1,14 +1,16 @@
-import waitress
 import sqlite3
 import time
-import threading
+import json
+import redis
+
 import serial
 import serial.tools.list_ports
 import random
-import json
 
-from frontend.webserver import app
-import sharedVars
+DBPATH = "BaseStation/EVGPTelemetry.sqlite"
+
+# Connect to Redis
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 # Function to set up a db table
 def setupTable(table, con, cur):
@@ -60,7 +62,6 @@ def setupTable(table, con, cur):
         """)
     con.commit()
 
-
 # Fnction to insert data into a certian table
 def insertData(table, data, con, cur):
     insert_data_sql = f"""
@@ -78,130 +79,160 @@ def insertData(table, data, con, cur):
     cur.execute(insert_data_sql, data)
     con.commit()
 
+# Function to make a random telemetry packet
+def random_data(id):
+    data = {
+        "id": id,
+        "timestamp": time.time(),
+        "ampHrs": random.uniform(0, 100),
+        "voltage": random.uniform(0, 100),
+        "current": random.uniform(0, 100),
+        "speed": random.uniform(0, 100),
+        "miles": random.uniform(0, 100),
+        "fix": random.uniform(0, 100),
+        "gpsX": random.uniform(0, 100),
+        "gpsY": random.uniform(0, 100),
+        "throttle": random.uniform(0, 100),
+        "brake": random.uniform(0, 100),
+        "motorTemp": random.uniform(0, 100),
+        "batt1": random.uniform(0, 100),
+        "batt2": random.uniform(0, 100),
+        "batt3": random.uniform(0, 100),
+        "batt4": random.uniform(0, 100),
+        "ambientTemp": random.uniform(0, 100),
+        "roll": random.uniform(0, 100),
+        "pitch": random.uniform(0, 100),
+        "heading": random.uniform(0, 100),
+        "altitude": random.uniform(0, 100),
+    }
+    return json.dumps(data)
 
-# Background function to read and store data from serial
-def readAndStoreData():
-    # These lines are for a random data feed during testing
-    while True:
-        sharedVars.data_blue_445 = [time.time()] + [random.uniform(0, 100) for i in range(20)]
-        sharedVars.data_blue_111 = [time.time()] + [random.uniform(0, 100) for i in range(20)]
-        time.sleep(0.25)
+# These lines are for a random data feed during testing
+#while True:
+#    redis_client.publish('sse', json.dumps({
+#        "type": "telemetry",
+#        "data": json.loads(random_data("blue_445"))  # Pass dict instead of string
+#    }))
+#    time.sleep(1)
+#
+#    redis_client.publish('sse', json.dumps({
+#        "type": "telemetry",
+#        "data": json.loads(random_data("red_111"))  # Pass dict instead of string
+#    }))
+#    time.sleep(1)
+#
+#    print("fake data sent")
 
-    # Link the database to the python cursor
-    con = sqlite3.connect(sharedVars.DBPATH)
-    cur = con.cursor()
+# Link the database to the python cursor
+con = sqlite3.connect(DBPATH)
+cur = con.cursor()
 
-    # Set up the two tables
-    setupTable("blue_445", con, cur)
-    setupTable("red_111", con, cur)
+# Set up the two tables
+setupTable("blue_445", con, cur)
+setupTable("red_111", con, cur)
 
-    # Establish a serial connection to the esp32
-    ser = None
-    while ser is None:
-        try:
-            # Get a list of available devices
-            ports = serial.tools.list_ports.comports()
+# Establish a serial connection to the esp32
+ser = None
+while ser is None:
+    try:
+        # Get a list of available devices
+        ports = serial.tools.list_ports.comports()
 
-            # Look for the USB to UART Bridge that is on the esp32
-            for port in ports:
-                if "CP210" in port.description or "CH340" in port.description:
-                    serDevice = port.device
-                    ser = serial.Serial(serDevice, 115200, timeout=1)
+        # Look for the USB to UART Bridge that is on the esp32
+        for port in ports:
+            if "CP210" in port.description or "CH340" in port.description:
+                serDevice = port.device
+                ser = serial.Serial(serDevice, 115200, timeout=1)
 
-            time.sleep(1)
-        except Exception as e:
-            print("Error establishing serial connection:", e)
-            time.sleep(1)
+        time.sleep(1)
+    except Exception as e:
+        print("Error establishing serial connection:", e)
+        time.sleep(1)
 
 
-    # Constantly read and process the serial connection
-    serErros = 0
-    while True:
-        try:
-            # Read a line from the serial
-            raw_line = ser.readline()
+# Constantly read and process the serial connection
+serErros = 0
+while True:
+    try:
+        # Read a line from the serial
+        raw_line = ser.readline()
 
-            # If we timed out, try again
-            if not raw_line:
+        # If we timed out, try again
+        if not raw_line:
+            continue
+
+        # Clean up the line
+        line = raw_line.decode(errors='ignore').strip()
+
+        # Ignore empty lines after cleaning
+        if not line:
+            continue
+
+        print("\n", line, "\n")
+
+        if line.startswith("{"):
+            # Parse JSON
+            data = json.loads(line)
+
+            # Convert the timestamp back from miliseconds to seconds
+            if data["timestamp"] != None:
+                data["timestamp"] /= 100
+
+            # Trigger a SSE broadcast to clients using redis
+            # flask-sse is listening on the channel "sse"
+            redis_client.publish('sse', json.dumps({
+                "type": "telemetry",  # Event type expected by flask-sse
+                "data": data
+            }))
+
+            if data["timestamp"] is None:
+                print("No timestamp for packet! Skipping database insertion!")
                 continue
 
-            # Clean up the line
-            line = raw_line.decode(errors='ignore').strip()
+            # Turn the data into a list for insertion into the database
+            id = data["id"]
+            dataList = [
+                data["timestamp"],
+                data["ampHrs"],
+                data["voltage"],
+                data["current"],
+                data["speed"],
+                data["miles"],
+                data["fix"],
+                data["gpsX"],
+                data["gpsY"],
+                data["throttle"],
+                data["brake"],
+                data["motorTemp"],
+                data["batt1"],
+                data["batt2"],
+                data["batt3"],
+                data["batt4"],
+                data["ambientTemp"],
+                data["roll"],
+                data["pitch"],
+                data["heading"],
+                data["altitude"]
+            ]
 
-            # Ignore empty lines after cleaning
-            if not line:
-                continue
+            # Insert the data into the database
+            insertData(id, dataList, con, cur)
 
-            print("\n", line, "\n")
+        else:
+            raise ValueError(f"Invalid data received: {line}")
 
-            if line.startswith("{"):
-                # Parse JSON
-                parsed_data = json.loads(line)
+    except Exception as e:
+        print("Data store error:", e)
 
-                data = [
-                    parsed_data["timestamp"] / 100 if parsed_data["timestamp"] is not None else None,
-                    parsed_data["ampHrs"],
-                    parsed_data["voltage"],
-                    parsed_data["current"],
-                    parsed_data["speed"],
-                    parsed_data["miles"],
-                    parsed_data["fix"],
-                    parsed_data["gpsX"],
-                    parsed_data["gpsY"],
-                    parsed_data["throttle"],
-                    parsed_data["brake"],
-                    parsed_data["motorTemp"],
-                    parsed_data["batt1"],
-                    parsed_data["batt2"],
-                    parsed_data["batt3"],
-                    parsed_data["batt4"],
-                    parsed_data["ambientTemp"],
-                    parsed_data["roll"],
-                    parsed_data["pitch"],
-                    parsed_data["heading"],
-                    parsed_data["altitude"]
-                ]
+        serErros += 1
+        if serErros >= 5:
+            print("Restarting Serial Connection!")
+            try:
+                ser.close()
+                time.sleep(0.1)
+                ser = serial.Serial(serDevice, 115200, timeout=1)
+            except Exception as e:
+                print("Error reestablishing serial connection:", e)
 
-                id = parsed_data["id"]
-
-                if id == "blue_445":
-                    sharedVars.data_blue_445 = data
-                elif id == "red_111":
-                    sharedVars.data_red_111 = data
-                else:
-                    raise ValueError(f"Invalid car id: {id}")
-
-                if data[0] is None:
-                    print("No timestamp for packet!")
-                    continue
-
-                insertData(id, data, con, cur)
-
-            else:
-                raise ValueError(f"Invalid data received: {line}")
-
-        except Exception as e:
-            print("Data store error:", e)
-
-            serErros += 1
-            if serErros >= 5:
-                print("Restarting Serial Connection!")
-                try:
-                    ser.close()
-                    time.sleep(0.1)
-                    ser = serial.Serial(serDevice, 115200, timeout=1)
-                except Exception as e:
-                    print("Error reestablishing serial connection:", e)
-
-                serErros = 0
-            time.sleep(0.1)
-
-# Start the background thread to get data from serial
-thread = threading.Thread(target=readAndStoreData, daemon=True)
-thread.start()
-
-# Start the app for testing
-app.run(host='0.0.0.0', port=5000, debug=False)
-
-# Start the production server with waitress
-#waitress.serve(app, host='0.0.0.0', port=5000, threads=8)
+            serErros = 0
+        time.sleep(0.1)
