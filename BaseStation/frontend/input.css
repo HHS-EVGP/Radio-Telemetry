@@ -6,10 +6,6 @@
 }
 
 @layer base {
-  body {
-    @apply bg-blue-300
-  }
-
   h1 {
     @apply text-3xl
   }
@@ -20,7 +16,19 @@
 }
 
 @layer components {
-    .timebar {
-        @apply w-full bg-gray-700
-    }
+  .serverwarn {
+    @apply w-full bg-red-500 font-black p-5 text-3xl text-center top-0 sticky
+  }
+
+  .split {
+    @apply flex flex-col md:flex-row justify-around items-center p-5 space-y-5 md:space-y-0 md:space-x-5
+  }
+
+  .half {
+    @apply flex flex-col items-center justify-center space-y-3 p-5 text-center w-full h-full rounded-[4rem]
+  }
+
+  .timebar {
+    @apply w-full bg-gray-700 absolute bottom-0
+  }
 }

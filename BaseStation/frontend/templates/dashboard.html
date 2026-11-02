@@ -13,98 +13,103 @@
 </head>
 
 <body>
-  <div id="serverWarn" style="display: none;">
+  <div id="serverWarn" class="serverwarn" style="display: none;">
     Server is Offline or has Internal Error!
   </div>
 
-  <h1>Blue Car</h1>
+  <div class="split">
+    <div class="half bg-blue-500">
+      <h1>Blue Car</h1>
 
-  <section>
-    <h2>Statuses</h2>
-    <p>Timestamp: <span id="blue_445timeStamp">NNN</span></p>
-    <p>Throttle: <span id="blue_445throttle">NNN</span></p>
-    <p>Brake: <span id="blue_445brake">NNN</span></p>
-  </section>
+      <section>
+        <h2>Statuses</h2>
+        <p>Timestamp: <span id="blue_445timeStamp">NNN</span></p>
+        <p>Throttle: <span id="blue_445throttle">NNN</span></p>
+        <p>Brake: <span id="blue_445brake">NNN</span></p>
+      </section>
 
-  <section>
-    <h2>Temperatures</h2>
-    <p>Motor: <span id="blue_445motorTemp">NNN</span> °C</p>
-    <p>Battery 1: <span id="blue_445batt1">NNN</span> °C</p>
-    <p>Battery 2: <span id="blue_445batt2">NNN</span> °C</p>
-    <p>Battery 3: <span id="blue_445batt3">NNN</span> °C</p>
-    <p>Battery 4: <span id="blue_445batt4">NNN</span> °C</p>
-    <p>Ambient: <span id="blue_445ambientTemp">NNN</span> °C</p>
-  </section>
+      <section>
+        <h2>Temperatures</h2>
+        <p>Motor: <span id="blue_445motorTemp">NNN</span> °C</p>
+        <p>Battery 1: <span id="blue_445batt1">NNN</span> °C</p>
+        <p>Battery 2: <span id="blue_445batt2">NNN</span> °C</p>
+        <p>Battery 3: <span id="blue_445batt3">NNN</span> °C</p>
+        <p>Battery 4: <span id="blue_445batt4">NNN</span> °C</p>
+        <p>Ambient: <span id="blue_445ambientTemp">NNN</span> °C</p>
+      </section>
 
-  <section>
-    <h2>Electrical & Performance</h2>
-    <p>Amp Hours: <span id="blue_445ampHours">NNN.NNN</span></p>
-    <p>Estimated End Amp Hours: <span id="blue_445estEndAhs">NNN.NNN</span></p>
-    <p>Voltage: <span id="blue_445voltage">NNN</span> V</p>
-    <p>Current: <span id="blue_445current">NNN</span> A</p>
-    <p>Speed: <span id="blue_445speed">NNN</span> mph</p>
-    <p>Miles: <span id="blue_445miles">NNN.NNN</span></p>
-  </section>
+      <section>
+        <h2>Electrical & Performance</h2>
+        <p>Amp Hours: <span id="blue_445ampHours">NNN.NNN</span></p>
+        <p>Estimated End Amp Hours: <span id="blue_445estEndAhs">NNN.NNN</span></p>
+        <p>Voltage: <span id="blue_445voltage">NNN</span> V</p>
+        <p>Current: <span id="blue_445current">NNN</span> A</p>
+        <p>Speed: <span id="blue_445speed">NNN</span> mph</p>
+        <p>Miles: <span id="blue_445miles">NNN.NNN</span></p>
+      </section>
 
-  <section>
-    <h2>IMU</h2>
-    <p>Roll: <span id="blue_445roll">NNN</span>°</p>
-    <p>Pitch: <span id="blue_445pitch">NNN</span>°</p>
-    <p>Heading: <span id="blue_445heading">NNN</span>°</p>
-    <p>Altitude: <span id="blue_445altitude">NNN</span> m</p>
-  </section>
+      <section>
+        <h2>IMU</h2>
+        <p>Roll: <span id="blue_445roll">NNN</span>°</p>
+        <p>Pitch: <span id="blue_445pitch">NNN</span>°</p>
+        <p>Heading: <span id="blue_445heading">NNN</span>°</p>
+        <p>Altitude: <span id="blue_445altitude">NNN</span> m</p>
+      </section>
 
-  <section>
-    <h2>GPS</h2>
-    <p>Fix: <span id="blue_445gpsFix">NNN</span></p>
-    <p>GPS X: <span id="blue_445gpsX">NNN</span> m</p>
-    <p>GPS Y: <span id="blue_445gpsY">NNN</span> m</p>
-  </section>
+      <section>
+        <h2>GPS</h2>
+        <p>Fix: <span id="blue_445gpsFix">NNN</span></p>
+        <p>GPS X: <span id="blue_445gpsX">NNN</span> m</p>
+        <p>GPS Y: <span id="blue_445gpsY">NNN</span> m</p>
+      </section>
+    </div>
 
+    <div class="half bg-red-400">
+      <h1>Red Car</h1>
 
-  <h1>Red Car</h1>
+      <section>
+        <h2>Statuses</h2>
+        <p>Timestamp: <span id="red_111timeStamp">NNN</span></p>
+        <p>Throttle: <span id="red_111throttle">NNN</span></p>
+        <p>Brake: <span id="red_111brake">NNN</span></p>
+      </section>
 
-  <section>
-    <h2>Statuses</h2>
-    <p>Timestamp: <span id="red_111timeStamp">NNN</span></p>
-    <p>Throttle: <span id="red_111throttle">NNN</span></p>
-    <p>Brake: <span id="red_111brake">NNN</span></p>
-  </section>
+      <section>
+        <h2>Temperatures</h2>
+        <p>Motor: <span id="red_111motorTemp">NNN</span> °C</p>
+        <p>Battery 1: <span id="red_111batt1">NNN</span> °C</p>
+        <p>Battery 2: <span id="red_111batt2">NNN</span> °C</p>
+        <p>Battery 3: <span id="red_111batt3">NNN</span> °C</p>
+        <p>Battery 4: <span id="red_111batt4">NNN</span> °C</p>
+        <p>Ambient: <span id="red_111ambientTemp">NNN</span> °C</p>
+      </section>
 
-  <section>
-    <h2>Temperatures</h2>
-    <p>Motor: <span id="red_111motorTemp">NNN</span> °C</p>
-    <p>Battery 1: <span id="red_111batt1">NNN</span> °C</p>
-    <p>Battery 2: <span id="red_111batt2">NNN</span> °C</p>
-    <p>Battery 3: <span id="red_111batt3">NNN</span> °C</p>
-    <p>Battery 4: <span id="red_111batt4">NNN</span> °C</p>
-    <p>Ambient: <span id="red_111ambientTemp">NNN</span> °C</p>
-  </section>
+      <section>
+        <h2>Electrical & Performance</h2>
+        <p>Amp Hours: <span id="red_111ampHours">NNN.NNN</span></p>
+        <p>Estimated End Amp Hours: <span id="red_111estEndAhs">NNN.NNN</span></p>
+        <p>Voltage: <span id="red_111voltage">NNN</span> V</p>
+        <p>Current: <span id="red_111current">NNN</span> A</p>
+        <p>Speed: <span id="red_111speed">NNN</span> mph</p>
+        <p>Miles: <span id="red_111miles">NNN.NNN</span></p>
+      </section>
 
-  <section>
-    <h2>Electrical & Performance</h2>
-    <p>Amp Hours: <span id="red_111ampHours">NNN.NNN</span></p>
-    <p>Estimated End Amp Hours: <span id="red_111estEndAhs">NNN.NNN</span></p>
-    <p>Voltage: <span id="red_111voltage">NNN</span> V</p>
-    <p>Current: <span id="red_111current">NNN</span> A</p>
-    <p>Speed: <span id="red_111speed">NNN</span> mph</p>
-    <p>Miles: <span id="red_111miles">NNN.NNN</span></p>
-  </section>
+      <section>
+        <h2>IMU</h2>
+        <p>Roll: <span id="red_111roll">NNN</span>°</p>
+        <p>Pitch: <span id="red_111pitch">NNN</span>°</p>
+        <p>Heading: <span id="red_111heading">NNN</span>°</p>
+        <p>Altitude: <span id="red_111altitude">NNN</span> m</p>
+      </section>
 
-  <section>
-    <h2>IMU</h2>
-    <p>Roll: <span id="red_111roll">NNN</span>°</p>
-    <p>Pitch: <span id="red_111pitch">NNN</span>°</p>
-    <p>Heading: <span id="red_111heading">NNN</span>°</p>
-    <p>Altitude: <span id="red_111altitude">NNN</span> m</p>
-  </section>
-
-  <section>
-    <h2>GPS</h2>
-    <p>Fix: <span id="red_111gpsFix">NNN</span></p>
-    <p>GPS X: <span id="red_111gpsX">NNN</span> m</p>
-    <p>GPS Y: <span id="red_111gpsY">NNN</span> m</p>
-  </section>
+      <section>
+        <h2>GPS</h2>
+        <p>Fix: <span id="red_111gpsFix">NNN</span></p>
+        <p>GPS X: <span id="red_111gpsX">NNN</span> m</p>
+        <p>GPS Y: <span id="red_111gpsY">NNN</span> m</p>
+      </section>
+    </div>
+  </div>
 
   <div class="timebar">
     <p>Server Time: <span id="sysTime">NNN</span></p>
