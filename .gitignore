@@ -2,6 +2,7 @@
 pyenv/
 BaseStation/__pycache__
 BaseStation/frontend/__pycache__
+BaseStation/frontend/tailwindcss-linux-x64
 BaseStation/EVGPTelemetry.sqlite
 BaseStation/wifiConfig.sh
 raceInfo.pkl

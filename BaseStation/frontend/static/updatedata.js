@@ -1,5 +1,5 @@
+// Initial state
 let eventSource = null;
-
 
 // Helper to set text content if element exists
 function setText(id, text) {
@@ -9,31 +9,53 @@ function setText(id, text) {
   }
 }
 
-// Update DOM with incoming telemetry data point from Server-Sent Events
-function updateDashboard(data) {
+// Helpter to set the text content padded correctly if it's a number
+const numFormatter = new Intl.NumberFormat("en-US", {
+    minimumIntegerDigits: 3,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+    useGrouping: false // Prevents thousand separators like commas
+  });
+
+function setNum(id, num) {
+  const elem = document.getElementById(id);
+  if (!elem) return;
+
+  const parsed = parseFloat(num);
+
+  if (isNaN(parsed)) {
+    elem.textContent = "NNN";
+    return;
+  }
+
+  // Format to 3 decimal places
+  elem.textContent = numFormatter.format(parsed);
+}
+
+// Function to update the page when new data comes
+function updateDashboard(data, carId) {
   // Hide server warning since we got a live event
   const serverWarn = document.getElementById("serverWarn");
   if (serverWarn) serverWarn.style.display = "none";
 
   // Statuses
-  setText("timeStamp", data.timestamp ?? "NNN");
-  setText("carId", data.id ?? "NNN");
-  setText("throttle", data.throttle ?? "NNN");
-  setText("brakePedal", data.brakePedal ?? "NNN");
+  setNum(carId + "timeStamp", data.timestamp ?? "NNN");
+  setNum(carId + "throttle", data.throttle ?? "NNN");
+  setNum(carId + "brake", data.brake ?? "NNN");
 
   // Temperatures
-  setText("ambientTemp", data.ambientTemp ?? "NNN");
-  setText("motorTemp", data.motorTemp ?? "NNN");
-  setText("batt1", data.batt1 ?? "NNN");
-  setText("batt2", data.batt2 ?? "NNN");
-  setText("batt3", data.batt3 ?? "NNN");
-  setText("batt4", data.batt4 ?? "NNN");
+  setNum(carId + "ambientTemp", data.ambientTemp ?? "NNN");
+  setNum(carId + "motorTemp", data.motorTemp ?? "NNN");
+  setNum(carId + "batt1", data.batt1 ?? "NNN");
+  setNum(carId + "batt2", data.batt2 ?? "NNN");
+  setNum(carId + "batt3", data.batt3 ?? "NNN");
+  setNum(carId + "batt4", data.batt4 ?? "NNN");
 
   // Turn temperatures red if over 50 degrees
-  ["motorTemp", "batt1", "batt2", "batt3", "batt4"].forEach((id) => {
-    const element = document.getElementById(id);
+  ["motorTemp", "batt1", "batt2", "batt3", "batt4"].forEach((elementID) => {
+    const element = document.getElementById(carId + elementID);
     if (element) {
-      const value = parseFloat(data[id]) ?? 0;
+      const value = parseFloat(element.textContent);
       if (value > 50) {
         element.style.color = "red";
       } else {
@@ -43,27 +65,27 @@ function updateDashboard(data) {
   });
 
   // Electrical / Performance
-  setText("ampHours", data.ampHrs ?? "NNN.NNN");
-  setText("estEndAhs", data.endAmpHrs ?? "NNN.NNN");
-  setText("voltage", data.voltage ?? "NNN");
-  setText("current", data.current ?? "NNN");
-  setText("speed", data.speed ?? "NNN");
-  setText("miles", data.miles ?? "NNN.NNN");
+  setNum(carId + "ampHours", data.ampHrs ?? "NNN.NNN");
+  setNum(carId + "estEndAhs", data.endAmpHrs ?? "NNN.NNN");
+  setNum(carId + "voltage", data.voltage ?? "NNN");
+  setNum(carId + "current", data.current ?? "NNN");
+  setNum(carId + "speed", data.speed ?? "NNN");
+  setNum(carId + "miles", data.miles ?? "NNN.NNN");
 
   // IMU
-  setText("roll", data.roll ?? "NNN");
-  setText("pitch", data.pitch ?? "NNN");
-  setText("heading", data.heading ?? "NNN");
-  setText("altitude", data.altitude ?? "NNN");
+  setNum(carId + "roll", data.roll ?? "NNN");
+  setNum(carId + "pitch", data.pitch ?? "NNN");
+  setNum(carId + "heading", data.heading ?? "NNN");
+  setNum(carId + "altitude", data.altitude ?? "NNN");
 
   // GPS
-  setText("gpsX", data.gpsX ?? "NNN");
-  setText("gpsY", data.gpsY ?? "NNN");
+  setNum(carId + "gpsX", data.gpsX ?? "NNN");
+  setNum(carId + "gpsY", data.gpsY ?? "NNN");
 
   // Color and content of GPS fix status
-  const gpsFixElem = document.getElementById("gpsFix");
+  const gpsFixElem = document.getElementById(carId + "gpsFix");
   if (gpsFixElem) {
-    if (data.gpsFix === true) {
+    if (data.fix === "true") {
       gpsFixElem.textContent = "Yes";
       gpsFixElem.style.color = "green";
     } else {
@@ -75,8 +97,7 @@ function updateDashboard(data) {
 
 function updateTiming(data) {
   // Server time
-    setText("sysTime", data.systime ?? "NNN");
-
+  setText("sysTime", data.systime ?? "NNN");
 }
 
 // Connect to Server-Sent Events stream
@@ -97,14 +118,14 @@ function connectSSE() {
   eventSource.addEventListener("telemetry", function (event) {
     try {
       const data = JSON.parse(event.data);
-      updateDashboard(data);
+      updateDashboard(data, data.id);
     } catch (err) {
       console.error("Error parsing SSE data:", err);
     }
   });
 
   // Update the timer when we get timing data
-    eventSource.addEventListener("timing", function (event) {
+  eventSource.addEventListener("timing", function (event) {
     try {
       const data = JSON.parse(event.data);
       updateTiming(data);

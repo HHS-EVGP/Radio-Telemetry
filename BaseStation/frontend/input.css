@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-hhsblue: #061045;
+  --color-hhsred: #940000;
+}
+
+@layer base {
+  body {
+    @apply bg-blue-300
+  }
+
+  h1 {
+    @apply text-3xl
+  }
+
+  h2 {
+    @apply text-2xl
+  }
+}
+
+@layer components {
+    .timebar {
+        @apply w-full bg-gray-700
+    }
+}

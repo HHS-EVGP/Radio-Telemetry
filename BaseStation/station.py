@@ -89,7 +89,7 @@ def random_data(id):
         "current": random.uniform(0, 100),
         "speed": random.uniform(0, 100),
         "miles": random.uniform(0, 100),
-        "fix": random.uniform(0, 100),
+        "fix": random.choice(["true", "false"]),
         "gpsX": random.uniform(0, 100),
         "gpsY": random.uniform(0, 100),
         "throttle": random.uniform(0, 100),

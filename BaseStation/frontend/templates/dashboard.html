@@ -8,6 +8,7 @@
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.png') }}">
   <title>HHS EVGP Live Data</title>
 
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <script src="{{ url_for('static', filename='updatedata.js') }}"></script>
 </head>
 
@@ -16,60 +17,98 @@
     Server is Offline or has Internal Error!
   </div>
 
-  <h1>EVGP Telemetry Dashboard</h1>
+  <h1>Blue Car</h1>
 
   <section>
     <h2>Statuses</h2>
-    <p>Car ID: <span id="carId">NNN</span></p>
-    <p>Server Time: <span id="sysTime">NNN</span></p>
-    <p>Timestamp: <span id="timeStamp">NNN</span></p>
-    <p>Throttle: <span id="throttle">NNN</span></p>
-    <p>Brake Pedal: <span id="brakePedal">NNN</span></p>
+    <p>Timestamp: <span id="blue_445timeStamp">NNN</span></p>
+    <p>Throttle: <span id="blue_445throttle">NNN</span></p>
+    <p>Brake: <span id="blue_445brake">NNN</span></p>
   </section>
 
   <section>
     <h2>Temperatures</h2>
-    <p>Motor: <span id="motorTemp">NNN</span> °C</p>
-    <p>Battery 1: <span id="batt1">NNN</span> °C</p>
-    <p>Battery 2: <span id="batt2">NNN</span> °C</p>
-    <p>Battery 3: <span id="batt3">NNN</span> °C</p>
-    <p>Battery 4: <span id="batt4">NNN</span> °C</p>
-    <p>Ambient: <span id="ambientTemp">NNN</span> °C</p>
+    <p>Motor: <span id="blue_445motorTemp">NNN</span> °C</p>
+    <p>Battery 1: <span id="blue_445batt1">NNN</span> °C</p>
+    <p>Battery 2: <span id="blue_445batt2">NNN</span> °C</p>
+    <p>Battery 3: <span id="blue_445batt3">NNN</span> °C</p>
+    <p>Battery 4: <span id="blue_445batt4">NNN</span> °C</p>
+    <p>Ambient: <span id="blue_445ambientTemp">NNN</span> °C</p>
   </section>
 
   <section>
     <h2>Electrical & Performance</h2>
-    <p>Amp Hours: <span id="ampHours">NNN.NNN</span></p>
-    <p>Estimated End Amp Hours: <span id="estEndAhs">NNN.NNN</span></p>
-    <p>Voltage: <span id="voltage">NNN</span> V</p>
-    <p>Current: <span id="current">NNN</span> A</p>
-    <p>Speed: <span id="speed">NNN</span> mph</p>
-    <p>Miles: <span id="miles">NNN.NNN</span></p>
-  </section>
-
-  <section>
-    <h2>Timing & Laps</h2>
-    <p>Race Time: <span id="raceTimeMinutes"></span><span id="raceTime">NNN</span></p>
-    <p>Laps: <span id="laps">NN</span></p>
-    <p>Lap Time: <span id="lapTime">NNN</span> s</p>
-    <p>Last Lap Time: <span id="lastLapTime">NNN</span> s</p>
-    <p>Fastest Lap Time: <span id="fastestLapTime">NNN</span> s</p>
+    <p>Amp Hours: <span id="blue_445ampHours">NNN.NNN</span></p>
+    <p>Estimated End Amp Hours: <span id="blue_445estEndAhs">NNN.NNN</span></p>
+    <p>Voltage: <span id="blue_445voltage">NNN</span> V</p>
+    <p>Current: <span id="blue_445current">NNN</span> A</p>
+    <p>Speed: <span id="blue_445speed">NNN</span> mph</p>
+    <p>Miles: <span id="blue_445miles">NNN.NNN</span></p>
   </section>
 
   <section>
     <h2>IMU</h2>
-    <p>Roll: <span id="roll">NNN</span>°</p>
-    <p>Pitch: <span id="pitch">NNN</span>°</p>
-    <p>Heading: <span id="heading">NNN</span>°</p>
-    <p>Altitude: <span id="altitude">NNN</span> m</p>
+    <p>Roll: <span id="blue_445roll">NNN</span>°</p>
+    <p>Pitch: <span id="blue_445pitch">NNN</span>°</p>
+    <p>Heading: <span id="blue_445heading">NNN</span>°</p>
+    <p>Altitude: <span id="blue_445altitude">NNN</span> m</p>
   </section>
 
   <section>
     <h2>GPS</h2>
-    <p>Fix: <span id="gpsFix">NNN</span></p>
-    <p>GPS X: <span id="gpsX">NNN</span> m</p>
-    <p>GPS Y: <span id="gpsY">NNN</span> m</p>
+    <p>Fix: <span id="blue_445gpsFix">NNN</span></p>
+    <p>GPS X: <span id="blue_445gpsX">NNN</span> m</p>
+    <p>GPS Y: <span id="blue_445gpsY">NNN</span> m</p>
   </section>
+
+
+  <h1>Red Car</h1>
+
+  <section>
+    <h2>Statuses</h2>
+    <p>Timestamp: <span id="red_111timeStamp">NNN</span></p>
+    <p>Throttle: <span id="red_111throttle">NNN</span></p>
+    <p>Brake: <span id="red_111brake">NNN</span></p>
+  </section>
+
+  <section>
+    <h2>Temperatures</h2>
+    <p>Motor: <span id="red_111motorTemp">NNN</span> °C</p>
+    <p>Battery 1: <span id="red_111batt1">NNN</span> °C</p>
+    <p>Battery 2: <span id="red_111batt2">NNN</span> °C</p>
+    <p>Battery 3: <span id="red_111batt3">NNN</span> °C</p>
+    <p>Battery 4: <span id="red_111batt4">NNN</span> °C</p>
+    <p>Ambient: <span id="red_111ambientTemp">NNN</span> °C</p>
+  </section>
+
+  <section>
+    <h2>Electrical & Performance</h2>
+    <p>Amp Hours: <span id="red_111ampHours">NNN.NNN</span></p>
+    <p>Estimated End Amp Hours: <span id="red_111estEndAhs">NNN.NNN</span></p>
+    <p>Voltage: <span id="red_111voltage">NNN</span> V</p>
+    <p>Current: <span id="red_111current">NNN</span> A</p>
+    <p>Speed: <span id="red_111speed">NNN</span> mph</p>
+    <p>Miles: <span id="red_111miles">NNN.NNN</span></p>
+  </section>
+
+  <section>
+    <h2>IMU</h2>
+    <p>Roll: <span id="red_111roll">NNN</span>°</p>
+    <p>Pitch: <span id="red_111pitch">NNN</span>°</p>
+    <p>Heading: <span id="red_111heading">NNN</span>°</p>
+    <p>Altitude: <span id="red_111altitude">NNN</span> m</p>
+  </section>
+
+  <section>
+    <h2>GPS</h2>
+    <p>Fix: <span id="red_111gpsFix">NNN</span></p>
+    <p>GPS X: <span id="red_111gpsX">NNN</span> m</p>
+    <p>GPS Y: <span id="red_111gpsY">NNN</span> m</p>
+  </section>
+
+  <div class="timebar">
+    <p>Server Time: <span id="sysTime">NNN</span></p>
+  </div>
 </body>
 
 </html>
