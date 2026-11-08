@@ -9,6 +9,9 @@ import random
 
 DBPATH = "BaseStation/EVGPTelemetry.sqlite"
 
+# Toggle the random data feed during testing
+RANDOMDATA = True
+
 # Connect to Redis
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
@@ -108,20 +111,21 @@ def random_data(id):
     return json.dumps(data)
 
 # These lines are for a random data feed during testing
-#while True:
-#    redis_client.publish('sse', json.dumps({
-#        "type": "telemetry",
-#        "data": json.loads(random_data("blue_445"))  # Pass dict instead of string
-#    }))
-#    time.sleep(1)
-#
-#    redis_client.publish('sse', json.dumps({
-#        "type": "telemetry",
-#        "data": json.loads(random_data("red_111"))  # Pass dict instead of string
-#    }))
-#    time.sleep(1)
-#
-#    print("fake data sent")
+if RANDOMDATA:
+    while True:
+        redis_client.publish('sse', json.dumps({
+            "type": "telemetry",
+            "data": json.loads(random_data("blue_445"))  # Pass dict instead of string
+        }))
+        time.sleep(1)
+
+        redis_client.publish('sse', json.dumps({
+            "type": "telemetry",
+            "data": json.loads(random_data("red_111"))  # Pass dict instead of string
+        }))
+        time.sleep(1)
+
+        print("fake data sent")
 
 # Link the database to the python cursor
 con = sqlite3.connect(DBPATH)
