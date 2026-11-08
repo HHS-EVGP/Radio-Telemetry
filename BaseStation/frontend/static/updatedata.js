@@ -66,7 +66,6 @@ function updateDashboard(data, carId) {
 
   // Electrical / Performance
   setNum(carId + "ampHours", data.ampHrs ?? "NNN.NNN");
-  setNum(carId + "estEndAhs", data.endAmpHrs ?? "NNN.NNN");
   setNum(carId + "voltage", data.voltage ?? "NNN");
   setNum(carId + "current", data.current ?? "NNN");
   setNum(carId + "speed", data.speed ?? "NNN");
@@ -95,9 +94,68 @@ function updateDashboard(data, carId) {
   }
 }
 
+// Last race status from the server, used to decide what the race buttons do
+let raceStatus = "Not Started";
+
 function updateTiming(data) {
   // Server time
   setText("sysTime", data.systime ?? "NNN");
+
+  // Shared race info
+  raceStatus = data.status;
+  setText("raceStatus", data.status);
+  setText("raceTime", data.raceTime);
+
+  const started = raceStatus === "Running" || raceStatus === "Paused";
+  const startStop = document.getElementById("raceStartStop");
+  if (startStop) startStop.textContent = started ? "Stop Race" : "Start Race";
+
+  const pauseResume = document.getElementById("racePauseResume");
+  if (pauseResume) {
+    pauseResume.textContent = raceStatus === "Paused" ? "Resume Race" : "Pause Race";
+    pauseResume.disabled = !started;
+  }
+
+  // Per car info
+  for (const [carId, car] of Object.entries(data.cars ?? {})) {
+    setText(carId + "laps", car.laps);
+    setText(carId + "lapTime", car.lapTime);
+    setText(carId + "lastLapTime", car.lastLapTime);
+    setText(carId + "fastestLapTime", car.fastestLapTime);
+    setNum(carId + "estEndAhs", car.estEndAhs ?? "NNN.NNN");
+  }
+}
+
+// Send a timing command to the server. Every client gets the result through SSE
+async function sendCommand(url) {
+  try {
+    const response = await fetch(url, { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.error ?? "Command failed");
+      return;
+    }
+    updateTiming(data);
+  } catch (err) {
+    console.error("Error sending command:", err);
+    alert("Unable to reach the server");
+  }
+}
+
+function raceStartStop() {
+  if (raceStatus === "Running" || raceStatus === "Paused") {
+    if (confirm("Stop the race?")) sendCommand("/race/stop");
+  } else {
+    sendCommand("/race/start");
+  }
+}
+
+function racePauseResume() {
+  sendCommand(raceStatus === "Paused" ? "/race/resume" : "/race/pause");
+}
+
+function changeLap(carId, delta) {
+  sendCommand(`/laps/${carId}/${delta}`);
 }
 
 // Connect to Server-Sent Events stream

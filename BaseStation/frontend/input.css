@@ -13,6 +13,10 @@
   h2 {
     @apply text-2xl
   }
+
+  button {
+    @apply p-2 border-2 border-black
+  }
 }
 
 @layer components {

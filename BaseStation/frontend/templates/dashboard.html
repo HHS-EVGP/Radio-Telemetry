@@ -13,12 +13,12 @@
 </head>
 
 <body>
-  <div id="serverWarn" class="serverwarn" style="display: none;">
+  <div id="serverWarn" style="display: none;">
     Server is Offline or has Internal Error!
   </div>
 
-  <div class="split">
-    <div class="half bg-blue-500">
+  <div>
+    <div class="m-10">
       <h1>Blue Car</h1>
 
       <section>
@@ -64,7 +64,7 @@
       </section>
     </div>
 
-    <div class="half bg-red-400">
+    <div class="m-10">
       <h1>Red Car</h1>
 
       <section>
@@ -111,8 +111,35 @@
     </div>
   </div>
 
-  <div class="timebar">
+  <div class="m-10">
+    <h1>Timing:</h1>
     <p>Server Time: <span id="sysTime">NNN</span></p>
+    <p>Race Status: <span id="raceStatus">NNN</span></p>
+    <p>Race Time: <span id="raceTime">NNN</span></p>
+    <p>
+      <button id="raceStartStop" onclick="raceStartStop()">Start Race</button>
+      <button id="racePauseResume" onclick="racePauseResume()" disabled>Pause Race</button>
+    </p>
+
+    <h2>Blue Car</h2>
+    <p>Laps: <span id="blue_445laps">NNN</span></p>
+    <p>Lap Time: <span id="blue_445lapTime">NNN</span></p>
+    <p>Last Lap Time: <span id="blue_445lastLapTime">NNN</span></p>
+    <p>Fastest Lap Time: <span id="blue_445fastestLapTime">NNN</span></p>
+    <p>
+      <button onclick="changeLap('blue_445', 'plus')">Lap+</button>
+      <button onclick="changeLap('blue_445', 'minus')">Lap-</button>
+    </p>
+
+    <h2>Red Car</h2>
+    <p>Laps: <span id="red_111laps">NNN</span></p>
+    <p>Lap Time: <span id="red_111lapTime">NNN</span></p>
+    <p>Last Lap Time: <span id="red_111lastLapTime">NNN</span></p>
+    <p>Fastest Lap Time: <span id="red_111fastestLapTime">NNN</span></p>
+    <p>
+      <button onclick="changeLap('red_111', 'plus')">Lap+</button>
+      <button onclick="changeLap('red_111', 'minus')">Lap-</button>
+    </p>
   </div>
 </body>
 
