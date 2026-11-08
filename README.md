@@ -41,7 +41,7 @@ Another ESP32 receives the message and passes it to a computer. The computer the
 
 ### Assembling the PCB
 
-Published PCB designs with instructions are coming soon. If you are interested in replicating our system, please contact a team member.
+Published PCB designs with instructions are coming soon. If you are interested in replicating our system, please contact a team member at [contact@hhsevgp.org](mailto:contact@hhsevgp.org).
 
 ## Running the System
 
