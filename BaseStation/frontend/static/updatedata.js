@@ -126,19 +126,66 @@ function updateTiming(data) {
   }
 }
 
+// Show the race controls if authenticated, otherwise show the access code form
+function showControls(authed) {
+  document.querySelectorAll(".raceControls").forEach((elem) => {
+    elem.style.display = authed ? "" : "none";
+  });
+  const authForm = document.getElementById("authControls");
+  if (authForm) authForm.style.display = authed ? "none" : "";
+}
+
+async function checkAuth() {
+  try {
+    const response = await fetch("/auth");
+    const data = await response.json();
+    showControls(data.authed === true);
+  } catch (err) {
+    console.error("Error checking authentication:", err);
+  }
+}
+
+async function authenticate(code) {
+  const authError = document.getElementById("authError");
+  try {
+    const response = await fetch("/auth", { method: "POST", body: code });
+    const data = await response.json();
+    if (authError) authError.style.display = data.authed ? "none" : "block";
+    showControls(data.authed === true);
+  } catch (err) {
+    console.error("Error authenticating:", err);
+    alert("Unable to reach the server");
+  }
+}
+
+function playLapSound() {
+  const lapSound = document.getElementById("lapSound");
+  if (lapSound) {
+    lapSound.currentTime = 0;
+    lapSound.play().catch((err) => console.error("Error playing lap sound:", err));
+  }
+}
+
 // Send a timing command to the server. Every client gets the result through SSE
+// Returns true if the command succeeded
 async function sendCommand(url) {
   try {
     const response = await fetch(url, { method: "POST" });
     const data = await response.json();
+    if (response.status === 401) {
+      showControls(false);
+      return false;
+    }
     if (!response.ok) {
       alert(data.error ?? "Command failed");
-      return;
+      return false;
     }
     updateTiming(data);
+    return true;
   } catch (err) {
     console.error("Error sending command:", err);
     alert("Unable to reach the server");
+    return false;
   }
 }
 
@@ -154,8 +201,10 @@ function racePauseResume() {
   sendCommand(raceStatus === "Paused" ? "/race/resume" : "/race/pause");
 }
 
-function changeLap(carId, delta) {
-  sendCommand(`/laps/${carId}/${delta}`);
+async function changeLap(carId, delta) {
+  if ((await sendCommand(`/laps/${carId}/${delta}`)) && delta === "plus") {
+    playLapSound();
+  }
 }
 
 // Connect to Server-Sent Events stream
@@ -201,3 +250,6 @@ function connectSSE() {
 
 // Start Server-Sent Events connection
 connectSSE();
+
+// Show the controls only if this client is already authenticated
+document.addEventListener("DOMContentLoaded", checkAuth);

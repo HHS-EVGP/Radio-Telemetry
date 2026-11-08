@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from datetime import datetime
 import time
 import threading
@@ -35,6 +35,11 @@ TELEMETRY_FRESHNESS = 5  # Seconds a car's last timestamp is trusted for lap bou
 STATE_LOCK = "race_state_lock"
 LEADER_KEY = "timing_leader"
 WORKER_ID = uuid.uuid4().hex.encode()
+
+# Race and lap controls require this access code. Authenticated client IPs are
+# kept in Redis so every gunicorn worker sees them
+AUTHCODE = "hhsevgp"  # Make this whatever you like
+AUTHED_USERS_KEY = "authed_users"
 
 # Latest telemetry seen per car: {car_id: {"ampHrs", "timestamp", "received"}}
 latest_telemetry = {}
@@ -252,8 +257,24 @@ def respond(action):
     return jsonify(build_timing(state))
 
 
+## Authentication ##
+def is_authed():
+    return bool(redis_client.sismember(AUTHED_USERS_KEY, request.remote_addr))
+
+
+@app.route("/auth", methods=["GET", "POST"])
+def auth():
+    if request.method == "POST":
+        if request.get_data(as_text=True) != AUTHCODE:
+            return jsonify({"error": "Incorrect access code", "authed": False}), 401
+        redis_client.sadd(AUTHED_USERS_KEY, request.remote_addr)
+    return jsonify({"authed": is_authed()})
+
+
 @app.route("/race/<action>", methods=["POST"])
 def race_control(action):
+    if not is_authed():
+        return jsonify({"error": "Not authenticated"}), 401
     if action not in ("start", "stop", "pause", "resume"):
         return jsonify({"error": "Invalid race action"}), 404
     return respond(action)
@@ -261,6 +282,8 @@ def race_control(action):
 
 @app.route("/laps/<car_id>/<delta>", methods=["POST"])
 def lap_control(car_id, delta):
+    if not is_authed():
+        return jsonify({"error": "Not authenticated"}), 401
     if car_id not in CARS or delta not in ("plus", "minus"):
         return jsonify({"error": "Invalid lap action"}), 404
     return respond(f"lap:{car_id}:{delta}")

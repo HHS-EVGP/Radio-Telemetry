@@ -14,7 +14,7 @@
     @apply text-2xl
   }
 
-  button {
+  button, input {
     @apply p-2 border-2 border-black
   }
 }
