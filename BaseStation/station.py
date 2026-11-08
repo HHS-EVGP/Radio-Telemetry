@@ -26,7 +26,7 @@ def setupTable(table, con, cur):
         voltage REAL,
         current REAL,
         speed REAL,
-        miles REAL,
+        distance REAL,
         gps_fix INTEGER,
         GPS_x REAL,
         GPS_y REAL,
@@ -70,7 +70,7 @@ def insertData(table, data, con, cur):
     insert_data_sql = f"""
         INSERT INTO {table} (
             time,
-            amp_hours, voltage, current, speed, miles,
+            amp_hours, voltage, current, speed, distance,
             gps_fix, GPS_x, GPS_y,
             throttle, brake, motor_temp, batt_1, batt_2, batt_3, batt_4,
             ambient_temp, roll, pitch, heading, altitude, laps
@@ -91,7 +91,7 @@ def random_data(id):
         "voltage": random.uniform(0, 100),
         "current": random.uniform(0, 100),
         "speed": random.uniform(0, 100),
-        "miles": random.uniform(0, 100),
+        "distance": random.uniform(0, 100),
         "fix": random.choice(["true", "false"]),
         "gpsX": random.uniform(0, 100),
         "gpsY": random.uniform(0, 100),
@@ -201,7 +201,7 @@ while True:
                 data["voltage"],
                 data["current"],
                 data["speed"],
-                data["miles"],
+                data["distance"],
                 data["fix"],
                 data["gpsX"],
                 data["gpsY"],

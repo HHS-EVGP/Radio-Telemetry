@@ -13,7 +13,7 @@ typedef struct struct_message {
   float voltage;
   float current;
   float speed;
-  float miles;
+  float distance;
 
   // GPS
   bool fix;
@@ -57,7 +57,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   doc["voltage"] = carData.voltage;
   doc["current"] = carData.current;
   doc["speed"] = carData.speed;
-  doc["miles"] = carData.miles;
+  doc["distance"] = carData.distance;
   doc["fix"] = carData.fix;
   doc["gpsX"] = carData.gpsX;
   doc["gpsY"] = carData.gpsY;

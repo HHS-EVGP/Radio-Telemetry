@@ -84,7 +84,7 @@ typedef struct struct_message {
   float voltage;
   float current;
   float speed;
-  float miles;
+  float distance;
 
   // GPS
   bool fix;
@@ -311,7 +311,7 @@ bool verifyTabs(char *buff) {
 
 void getCA(char *caBuffer) {
   // Input format:
-  // ampHrs\tvoltage\tcurrent\tspeed\tmiles
+  // ampHrs\tvoltage\tcurrent\tspeed\tdistance
 
   // One by one, search for the | delemiter and extract the variables
   char *value = strtok(caBuffer, "\t");
@@ -327,7 +327,7 @@ void getCA(char *caBuffer) {
   if (value != NULL) carData.speed = atof(value);
 
   value = strtok(NULL, "\t");
-  if (value != NULL) carData.miles = atof(value);
+  if (value != NULL) carData.distance = atof(value);
 
   // Reset haveCA
   haveCA = false;
@@ -385,7 +385,7 @@ String packetToString(const struct_message &msg) {
   s += String(msg.voltage) + ",";
   s += String(msg.current) + ",";
   s += String(msg.speed) + ",";
-  s += String(msg.miles) + ",";
+  s += String(msg.distance) + ",";
   s += (msg.fix ? "True" : "False") + String(",");
   s += String(msg.gpsX) + ",";
   s += String(msg.gpsY) + ",";

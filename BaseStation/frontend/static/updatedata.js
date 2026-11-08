@@ -70,7 +70,7 @@ function updateDashboard(data, carId) {
   setNum(carId + "voltage", data.voltage ?? "NNN");
   setNum(carId + "current", data.current ?? "NNN");
   setNum(carId + "speed", data.speed ?? "NNN");
-  setNum(carId + "miles", data.miles ?? "NNN.NNN");
+  setNum(carId + "distance", data.distance ?? "NNN.NNN");
 
   // IMU
   setNum(carId + "roll", data.roll ?? "NNN");
