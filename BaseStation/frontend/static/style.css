@@ -178,6 +178,9 @@
   .block {
     display: block;
   }
+  .table {
+    display: table;
+  }
 }
 @layer base {
   h1 {

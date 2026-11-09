@@ -21,10 +21,10 @@ app.register_blueprint(sse, url_prefix='/stream')
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 REPO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-DBPATH = os.path.join(REPO_ROOT, "BaseStation", "EVGPTelemetry.sqlite")
+DB_PATH = os.path.join(REPO_ROOT, "BaseStation", "EVGPTelemetry.sqlite")
 RACEINFO_PATH = os.path.join(REPO_ROOT, "raceInfo.pkl")
 
-CARS = ["blue_445", "red_111"]
+CARS = ["blue_445", "red_111"]  # Also the database table names (keep in sync with station.py)
 RACE_LENGTH = 3600  # Seconds, used for the end amp hour estimate
 TIMING_INTERVAL = 0.2  # Seconds between timing broadcasts
 TELEMETRY_FRESHNESS = 5  # Seconds a car's last timestamp is trusted for lap boundaries
@@ -38,7 +38,7 @@ WORKER_ID = uuid.uuid4().hex.encode()
 
 # Race and lap controls require this access code. Authenticated client IPs are
 # kept in Redis so every gunicorn worker sees them
-AUTHCODE = "hhsevgp"  # Make this whatever you like
+AUTH_CODE = "hhsevgp"  # Make this whatever you like
 AUTHED_USERS_KEY = "authed_users"
 
 # Latest telemetry seen per car: {car_id: {"ampHrs", "timestamp", "received"}}
@@ -116,7 +116,7 @@ def build_timing(state):
     elapsed = race_elapsed(state, now) if state else None
 
     timing = {
-        "systime": datetime.now().strftime("%H:%M:%S"),
+        "sysTime": datetime.now().strftime("%H:%M:%S"),
         "status": status,
         "raceTime": format_time(elapsed),
         "cars": {},
@@ -128,7 +128,7 @@ def build_timing(state):
             "lapTime": None,
             "lastLapTime": None,
             "fastestLapTime": None,
-            "estEndAhs": None,
+            "estEndAmpHrs": None,
         }
 
         if state is not None:
@@ -144,7 +144,7 @@ def build_timing(state):
         # Linear extrapolation of amp hours used over the whole race
         amp_hrs = latest_telemetry.get(car_id, {}).get("ampHrs")
         if status in ("Running", "Paused") and amp_hrs is not None and elapsed > 0:
-            car_info["estEndAhs"] = amp_hrs * (RACE_LENGTH / elapsed)
+            car_info["estEndAmpHrs"] = amp_hrs * (RACE_LENGTH / elapsed)
 
         timing["cars"][car_id] = car_info
 
@@ -163,21 +163,21 @@ def sync_db_laps(car_id, car_state, end_ts=None):
     # Rewrite the laps column for this race from the lap boundaries, so lap+ and
     # lap- (corrections) both leave the database consistent. Points in the
     # current lap stay NULL until the next lap change or the end of the race
-    if not os.path.exists(DBPATH):
+    if not os.path.exists(DB_PATH):
         return
 
     bounds = [car_state["start_ts"]] + [lap["car_ts"] for lap in car_state["laps"]]
-    con = sqlite3.connect(DBPATH, timeout=5)
+    con = sqlite3.connect(DB_PATH, timeout=5)
     try:
         with con:
             for lap, (start, end) in enumerate(zip(bounds, bounds[1:])):
-                con.execute(f"UPDATE {car_id} SET laps = ? WHERE time >= ? AND time < ?",
+                con.execute(f"UPDATE {car_id} SET laps = ? WHERE timestamp >= ? AND timestamp < ?",
                             [lap, start, end])
 
             if end_ts is None:
-                con.execute(f"UPDATE {car_id} SET laps = NULL WHERE time >= ?", [bounds[-1]])
+                con.execute(f"UPDATE {car_id} SET laps = NULL WHERE timestamp >= ?", [bounds[-1]])
             else:
-                con.execute(f"UPDATE {car_id} SET laps = ? WHERE time >= ? AND time <= ?",
+                con.execute(f"UPDATE {car_id} SET laps = ? WHERE timestamp >= ? AND timestamp <= ?",
                             [len(bounds) - 1, bounds[-1], end_ts])
     except sqlite3.Error as e:
         print(f"Error updating laps in {car_id}:", e)
@@ -188,6 +188,7 @@ def sync_db_laps(car_id, car_state, end_ts=None):
 ## Race control ##
 def change_state(action):
     # Apply a change to the race state. Returns (state, error message or None)
+    # action is "start", "stop", "pause", "resume", or "lap:<car_id>:<plus|minus>"
     with redis_client.lock(STATE_LOCK, timeout=10, blocking_timeout=10):
         state = load_state()
         status = race_status(state)
@@ -232,6 +233,8 @@ def change_state(action):
             car_state = state["cars"][car_id]
 
             if delta == "plus":
+                # Never put a lap boundary before the previous one, which could
+                # happen if the car's clock jumps or we fall back to server time
                 prev_ts = car_state["laps"][-1]["car_ts"] if car_state["laps"] else car_state["start_ts"]
                 car_state["laps"].append({
                     "race_time": race_elapsed(state, now),
@@ -265,7 +268,7 @@ def is_authed():
 @app.route("/auth", methods=["GET", "POST"])
 def auth():
     if request.method == "POST":
-        if request.get_data(as_text=True) != AUTHCODE:
+        if request.get_data(as_text=True) != AUTH_CODE:
             return jsonify({"error": "Incorrect access code", "authed": False}), 401
         redis_client.sadd(AUTHED_USERS_KEY, request.remote_addr)
     return jsonify({"authed": is_authed()})
@@ -291,6 +294,8 @@ def lap_control(car_id, delta):
 
 ## Periodic timing broadcast ##
 def is_leader():
+    # Claim leadership if nobody holds it, or renew it if we already do. The key
+    # expires after 2 seconds, so another worker takes over if the leader dies
     if redis_client.set(LEADER_KEY, WORKER_ID, nx=True, ex=2):
         return True
     if redis_client.get(LEADER_KEY) == WORKER_ID:

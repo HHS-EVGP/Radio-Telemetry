@@ -9,28 +9,35 @@ function setText(id, text) {
   }
 }
 
-// Helpter to set the text content padded correctly if it's a number
+// Helper to set the text content padded correctly if it's a number
 const numFormatter = new Intl.NumberFormat("en-US", {
-    minimumIntegerDigits: 3,
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-    useGrouping: false // Prevents thousand separators like commas
-  });
+  minimumIntegerDigits: 3,
+  minimumFractionDigits: 3,
+  maximumFractionDigits: 3,
+  useGrouping: false, // Prevents thousand separators like commas
+});
 
 function setNum(id, num) {
   const elem = document.getElementById(id);
   if (!elem) return;
 
+  // null/undefined (missing or NAN on the car) parse to NaN
   const parsed = parseFloat(num);
-
-  if (isNaN(parsed)) {
-    elem.textContent = "NNN";
-    return;
-  }
-
-  // Format to 3 decimal places
-  elem.textContent = numFormatter.format(parsed);
+  elem.textContent = isNaN(parsed) ? "NNN" : numFormatter.format(parsed);
 }
+
+// Numeric telemetry fields. Each one is shown in the element with id <carId><field>
+const NUMERIC_FIELDS = [
+  "timestamp", "throttle", "brake",
+  "ambientTemp", "motorTemp", "batt1", "batt2", "batt3", "batt4",
+  "ampHrs", "voltage", "current", "speed", "distance",
+  "roll", "pitch", "heading", "altitude",
+  "gpsX", "gpsY",
+];
+
+// Temperatures that turn red above HOT_TEMP degrees C
+const WATCHED_TEMPS = ["motorTemp", "batt1", "batt2", "batt3", "batt4"];
+const HOT_TEMP = 50;
 
 // Function to update the page when new data comes
 function updateDashboard(data, carId) {
@@ -38,59 +45,18 @@ function updateDashboard(data, carId) {
   const serverWarn = document.getElementById("serverWarn");
   if (serverWarn) serverWarn.style.display = "none";
 
-  // Statuses
-  setNum(carId + "timeStamp", data.timestamp ?? "NNN");
-  setNum(carId + "throttle", data.throttle ?? "NNN");
-  setNum(carId + "brake", data.brake ?? "NNN");
+  NUMERIC_FIELDS.forEach((field) => setNum(carId + field, data[field]));
 
-  // Temperatures
-  setNum(carId + "ambientTemp", data.ambientTemp ?? "NNN");
-  setNum(carId + "motorTemp", data.motorTemp ?? "NNN");
-  setNum(carId + "batt1", data.batt1 ?? "NNN");
-  setNum(carId + "batt2", data.batt2 ?? "NNN");
-  setNum(carId + "batt3", data.batt3 ?? "NNN");
-  setNum(carId + "batt4", data.batt4 ?? "NNN");
-
-  // Turn temperatures red if over 50 degrees
-  ["motorTemp", "batt1", "batt2", "batt3", "batt4"].forEach((elementID) => {
-    const element = document.getElementById(carId + elementID);
-    if (element) {
-      const value = parseFloat(element.textContent);
-      if (value > 50) {
-        element.style.color = "red";
-      } else {
-        element.style.color = "";
-      }
-    }
+  WATCHED_TEMPS.forEach((field) => {
+    const elem = document.getElementById(carId + field);
+    if (elem) elem.style.color = data[field] > HOT_TEMP ? "red" : "";
   });
 
-  // Electrical / Performance
-  setNum(carId + "ampHours", data.ampHrs ?? "NNN.NNN");
-  setNum(carId + "voltage", data.voltage ?? "NNN");
-  setNum(carId + "current", data.current ?? "NNN");
-  setNum(carId + "speed", data.speed ?? "NNN");
-  setNum(carId + "distance", data.distance ?? "NNN.NNN");
-
-  // IMU
-  setNum(carId + "roll", data.roll ?? "NNN");
-  setNum(carId + "pitch", data.pitch ?? "NNN");
-  setNum(carId + "heading", data.heading ?? "NNN");
-  setNum(carId + "altitude", data.altitude ?? "NNN");
-
-  // GPS
-  setNum(carId + "gpsX", data.gpsX ?? "NNN");
-  setNum(carId + "gpsY", data.gpsY ?? "NNN");
-
   // Color and content of GPS fix status
-  const gpsFixElem = document.getElementById(carId + "gpsFix");
-  if (gpsFixElem) {
-    if (data.fix === "true") {
-      gpsFixElem.textContent = "Yes";
-      gpsFixElem.style.color = "green";
-    } else {
-      gpsFixElem.textContent = "No";
-      gpsFixElem.style.color = "red";
-    }
+  const fixElem = document.getElementById(carId + "fix");
+  if (fixElem) {
+    fixElem.textContent = data.fix === true ? "Yes" : "No";
+    fixElem.style.color = data.fix === true ? "green" : "red";
   }
 }
 
@@ -99,7 +65,7 @@ let raceStatus = "Not Started";
 
 function updateTiming(data) {
   // Server time
-  setText("sysTime", data.systime ?? "NNN");
+  setText("sysTime", data.sysTime);
 
   // Shared race info
   raceStatus = data.status;
@@ -122,7 +88,7 @@ function updateTiming(data) {
     setText(carId + "lapTime", car.lapTime);
     setText(carId + "lastLapTime", car.lastLapTime);
     setText(carId + "fastestLapTime", car.fastestLapTime);
-    setNum(carId + "estEndAhs", car.estEndAhs ?? "NNN.NNN");
+    setNum(carId + "estEndAmpHrs", car.estEndAmpHrs);
   }
 }
 
@@ -171,7 +137,8 @@ function playLapSound() {
 async function sendCommand(url) {
   try {
     const response = await fetch(url, { method: "POST" });
-    const data = await response.json();
+    // Server errors (500) return HTML instead of JSON, so the .catch wraps it in a json
+    const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
       showControls(false);
       return false;
@@ -215,7 +182,7 @@ function connectSSE() {
 
   eventSource = new EventSource("/stream");
 
-  // Disaible the server warning if we establish a conection
+  // Hide the server warning if we establish a connection
   eventSource.onopen = function () {
     const serverWarn = document.getElementById("serverWarn");
     if (serverWarn) serverWarn.style.display = "none";
