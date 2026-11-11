@@ -18,6 +18,11 @@ typedef struct TelemetryPacket {
   float speed;
   float distance;
 
+  // Calculated on the car from the CA data
+  float wattHrs;
+  float restVoltage;
+  float resistance;
+
   // GPS
   bool fix;
   double gpsX;
@@ -77,6 +82,9 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   doc["current"] = carData.current;
   doc["speed"] = carData.speed;
   doc["distance"] = carData.distance;
+  doc["wattHrs"] = carData.wattHrs;
+  doc["restVoltage"] = carData.restVoltage;
+  doc["resistance"] = carData.resistance;
   doc["fix"] = carData.fix;
   doc["gpsX"] = carData.gpsX;
   doc["gpsY"] = carData.gpsY;

@@ -15,6 +15,7 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <Preferences.h>
 
 // Change this to REDCAR/BLUECAR to select car settings
 #define BLUECAR
@@ -74,24 +75,44 @@ const int dataLight = 25;
 const int errorLight = 26;
 
 // Thermistor values
-const float seriesResistor = 13000.0;  // Ohms
-const float adcMaxReading = 32767.0;   // Highest raw reading of the ADCs
+const float seriesResistor = 13000.0; // Ohms
+const float adcMaxReading = 32767.0;  // Highest raw reading of the ADCs
 // Steinhart-Hart coefficients
 const float steinhartA = 1.009249522e-03;
 const float steinhartB = 2.378405444e-04;
 const float steinhartC = 2.019202697e-07;
 
+// Energy totals, saved to the ESP32's internal flash so a reboot mid race picks up where it left off
+Preferences energyPrefs;
+const float caResetAh = 0.5;                    // A drop in amp hours bigger than this means the CA was reset
+const unsigned long energySaveInterval = 30000; // ms between saves to flash
+unsigned long energySaveTimer = 0;
+double wattHrsTotal = 0; // Kept as a double so small steps aren't lost to rounding
+float lastAmpHrs = NAN;
+float lastVoltage = NAN;
+
+// Battery estimate: fit voltage = restVoltage - resistance * current over windows of data
+// (from the 2025-26 race analysis, this showed the voltage collapse about 8 minutes early)
+const unsigned long battWindow = 30000; // ms of data per estimate
+const int battMinSamples = 40;
+const float battMinCurrentStd = 4; // Amps, needs enough change in current to see the sag
+const float battMinR2 = 0.6;       // How cleanly the line has to fit
+unsigned long battWindowStart = 0;
+int battCount = 0;
+double battSumI = 0, battSumV = 0, battSumII = 0, battSumVV = 0, battSumIV = 0;
+
 // Receiver mac address
-uint8_t broadcastAddress[] = { 0x68, 0xFE, 0x71, 0x0B, 0x6D, 0x68 };
+uint8_t broadcastAddress[] = {0x68, 0xFE, 0x71, 0x0B, 0x6D, 0x68};
 
 // Packet structure
 // The receiver copies the raw bytes of this struct, so it MUST stay identical
 // (field order and types) to the TelemetryPacket in BaseStation/receiver.ino
-typedef struct TelemetryPacket {
+typedef struct TelemetryPacket
+{
   // Car ID is a fixed array of bytes since a regular String is just a pointer
   char id[12] = CAR_ID;
 
-  double timestamp = NAN;  // Unix time in seconds, NAN until the GPS gives a time
+  double timestamp = NAN; // Unix time in seconds, NAN until the GPS gives a time
 
   // CA
   float ampHrs;
@@ -99,6 +120,11 @@ typedef struct TelemetryPacket {
   float current;
   float speed;
   float distance;
+
+  // Calculated on the car from the CA data
+  float wattHrs = 0;       // Integrated from voltage and the CA's amp hours, saved to flash
+  float restVoltage = NAN; // Estimated open circuit voltage, NAN until the first good estimate
+  float resistance = NAN;  // Estimated pack + wiring resistance in ohms
 
   // GPS
   bool fix;
@@ -129,16 +155,19 @@ TelemetryPacket carData;
 esp_now_peer_info_t peerInfo;
 
 // Helper functions
-void fatalError(String message) {
+void fatalError(String message)
+{
   Serial.println(message);
 
   digitalWrite(errorLight, HIGH);
-  while (true) {
+  while (true)
+  {
     delay(100);
   }
 }
 
-void warning(String message) {
+void warning(String message)
+{
   Serial.println(message);
 
   // "You have a message"
@@ -147,19 +176,24 @@ void warning(String message) {
   digitalWrite(errorLight, LOW);
 }
 
-void initIMU() {
-  if (!accel.begin()) {
+void initIMU()
+{
+  if (!accel.begin())
+  {
     fatalError("IMU Accelerometer Initialization Error");
   }
-  if (!mag.begin()) {
+  if (!mag.begin())
+  {
     fatalError("IMU Magnetometer Initialization Error");
   }
-  if (!bmp.begin()) {
+  if (!bmp.begin())
+  {
     fatalError("IMU Barometer Initialization Error");
   }
 }
 
-void getIMU() {
+void getIMU()
+{
   // Get Sensor Events
   sensors_event_t accelEvent;
   sensors_event_t magEvent;
@@ -168,10 +202,13 @@ void getIMU() {
 
   // Pitch and roll
   accel.getEvent(&accelEvent);
-  if (dof.accelGetOrientation(&accelEvent, &orientation)) {
+  if (dof.accelGetOrientation(&accelEvent, &orientation))
+  {
     carData.roll = orientation.roll;
     carData.pitch = orientation.pitch;
-  } else {
+  }
+  else
+  {
     warning("No Accelerometer Value!");
     carData.roll = carData.pitch = NAN;
   }
@@ -180,16 +217,20 @@ void getIMU() {
 
   // Heading
   mag.getEvent(&magEvent);
-  if (dof.magGetOrientation(SENSOR_AXIS_Z, &magEvent, &orientation)) {
+  if (dof.magGetOrientation(SENSOR_AXIS_Z, &magEvent, &orientation))
+  {
     carData.heading = orientation.heading;
-  } else {
+  }
+  else
+  {
     warning("No Magnetometer value!");
     carData.heading = NAN;
   }
 
   // Altitude and temperature
   bmp.getEvent(&bmpEvent);
-  if (bmpEvent.pressure) {
+  if (bmpEvent.pressure)
+  {
     // Get ambient temperature in C
     float temperature;
     bmp.getTemperature(&temperature);
@@ -197,7 +238,9 @@ void getIMU() {
     // Convert atmospheric pressure, SLP and temp to altitude
     carData.ambientTemp = temperature;
     carData.altitude = bmp.pressureToAltitude(seaLevelPressure, bmpEvent.pressure, temperature);
-  } else {
+  }
+  else
+  {
     warning("No Altitude or Temperature value!");
     carData.altitude = carData.ambientTemp = NAN;
   }
@@ -205,14 +248,14 @@ void getIMU() {
 
 // Expects the TZ environment variable to be set to UTC (done in setup())
 double toUnixTimestamp(
-  int year, int month, int day,
-  int hour, int minute, int seconds,
-  int milliseconds) {
+    int year, int month, int day,
+    int hour, int minute, int seconds,
+    int milliseconds)
+{
+  struct tm t = {0};
 
-  struct tm t = { 0 };
-
-  t.tm_year = year + 100;  // Adafruit GPS gives year as 0-99; t.tm_year is years since 1900
-  t.tm_mon = month - 1;    // mktime expects months starting at 0
+  t.tm_year = year + 100; // Adafruit GPS gives year as 0-99; t.tm_year is years since 1900
+  t.tm_mon = month - 1;   // mktime expects months starting at 0
   t.tm_mday = day;
   t.tm_hour = hour;
   t.tm_min = minute;
@@ -224,35 +267,42 @@ double toUnixTimestamp(
   return (double)unixSec + (milliseconds / 1000.0);
 }
 
-double degToRad(double deg) {
+double degToRad(double deg)
+{
   return (deg / 180) * M_PI;
 }
 
-void getGPS() {
+void getGPS()
+{
   // Attempt to parse gps message
   bool parsed = gps.parse(gps.lastNMEA());
 
   // Give a warning if the parse fails after the first second
   // (The gps module spits out some system info at first)
-  if (!parsed && millis() > 1000) {
+  if (!parsed && millis() > 1000)
+  {
     warning("GPS Parse Error!");
   }
 
   // The year stays 0 until the GPS module has gotten the date from a satellite
-  if (parsed && gps.year != 0) {
+  if (parsed && gps.year != 0)
+  {
     lastGPSTimestamp = toUnixTimestamp(gps.year, gps.month, gps.day,
                                        gps.hour, gps.minute, gps.seconds,
                                        gps.milliseconds);
     lastGPSMillis = millis();
     carData.timestamp = lastGPSTimestamp;
-  } else if (!isnan(lastGPSTimestamp)) {
+  }
+  else if (!isnan(lastGPSTimestamp))
+  {
     // Estimate the timestamp from how long it has been since the last GPS time
     carData.timestamp = lastGPSTimestamp + (millis() - lastGPSMillis) / 1000.0;
   }
   // Otherwise we have never had a GPS time, so the timestamp stays NAN
 
   carData.fix = parsed && gps.fix;
-  if (!carData.fix) {
+  if (!carData.fix)
+  {
     carData.gpsX = NAN;
     carData.gpsY = NAN;
     return;
@@ -265,15 +315,18 @@ void getGPS() {
   // Mercator project latitude and longitude into x and y (meters)
   // 6378100 meters is the IAU nominal "zero tide" equatorial radius of the earth
   carData.gpsX = 6378100 * lonRad;
-  carData.gpsY = 6378100 * log(tan((M_PI / 4) + (latRad / 2)));  // in c++ log is natural log
+  carData.gpsY = 6378100 * log(tan((M_PI / 4) + (latRad / 2))); // in c++ log is natural log
 }
 
 // Count the tabs in a CA line. A valid line has exactly 4 (5 values)
-bool verifyTabs(const char *buff) {
+bool verifyTabs(const char *buff)
+{
   int count = 0;
 
-  while (*buff != '\0') {
-    if (*buff == '\t') {
+  while (*buff != '\0')
+  {
+    if (*buff == '\t')
+    {
       count++;
     }
     buff++;
@@ -283,66 +336,175 @@ bool verifyTabs(const char *buff) {
 }
 
 // Read any available characters from the CA, setting haveCA when a full line is ready
-void readCA() {
-  while (caSerial.available()) {
+void readCA()
+{
+  while (caSerial.available())
+  {
     char c = caSerial.read();
 
     // Skip carriage returns
-    if (c == '\r') continue;
+    if (c == '\r')
+      continue;
 
-    if (c == '\n') {
+    if (c == '\n')
+    {
       // Null terminate the string and reset the buffer index
       caBuffer[caIndex] = '\0';
       caIndex = 0;
 
       // Log CA message if needed
-      if (uartDebug) {
+      if (uartDebug)
+      {
         Serial.println(caBuffer);
       }
 
-      if (verifyTabs(caBuffer)) {
+      if (verifyTabs(caBuffer))
+      {
         strcpy(caLine, caBuffer);
         haveCA = true;
-      } else {
+      }
+      else
+      {
         warning("Invalid CA String");
       }
-
-    } else if (caIndex < CA_BUF_SIZE - 1) {  // If we have room in the buffer
-      caBuffer[caIndex++] = c;               // add c to the buffer while increasing the index
+    }
+    else if (caIndex < CA_BUF_SIZE - 1)
+    {                          // If we have room in the buffer
+      caBuffer[caIndex++] = c; // add c to the buffer while increasing the index
     }
   }
 }
 
-void getCA() {
+void getCA()
+{
   // Input format:
   // ampHrs\tvoltage\tcurrent\tspeed\tdistance
 
   // One by one, search for the tab delimiter and extract the values
   char *value = strtok(caLine, "\t");
-  if (value != NULL) carData.ampHrs = atof(value);
+  if (value != NULL)
+    carData.ampHrs = atof(value);
 
-  value = strtok(NULL, "\t");  // Using NULL means to start where we left off
-  if (value != NULL) carData.voltage = atof(value);
-
-  value = strtok(NULL, "\t");
-  if (value != NULL) carData.current = atof(value);
-
-  value = strtok(NULL, "\t");
-  if (value != NULL) carData.speed = atof(value);
+  value = strtok(NULL, "\t"); // Using NULL means to start where we left off
+  if (value != NULL)
+    carData.voltage = atof(value);
 
   value = strtok(NULL, "\t");
-  if (value != NULL) carData.distance = atof(value);
+  if (value != NULL)
+    carData.current = atof(value);
+
+  value = strtok(NULL, "\t");
+  if (value != NULL)
+    carData.speed = atof(value);
+
+  value = strtok(NULL, "\t");
+  if (value != NULL)
+    carData.distance = atof(value);
 
   // This line has been used, wait for the next one
   haveCA = false;
 }
 
-void initADCs() {
-  if (!adc1.begin()) {
+void initEnergy()
+{
+  energyPrefs.begin("energy", false);
+  wattHrsTotal = energyPrefs.getDouble("wattHrs", 0);
+  lastAmpHrs = energyPrefs.getFloat("ampHrs", NAN);
+  carData.wattHrs = wattHrsTotal;
+}
+
+// Integrate voltage over the change in the CA's amp hours. Using the CA's own amp
+// hour counter means CA lines that are skipped, or time the car was off, still count
+void updateEnergy()
+{
+  float ampHrs = carData.ampHrs;
+  float voltage = carData.voltage;
+  if (isnan(ampHrs) || isnan(voltage))
+    return;
+
+  if (isnan(lastAmpHrs) || ampHrs < lastAmpHrs - caResetAh)
+  {
+    // No saved total, or the CA's amp hours were reset, so start over
+    wattHrsTotal = ampHrs * voltage;
+  }
+  else
+  {
+    // Average with the last voltage, or use this one if the car just started
+    float avgVoltage = isnan(lastVoltage) ? voltage : (voltage + lastVoltage) / 2;
+    wattHrsTotal += (ampHrs - lastAmpHrs) * avgVoltage;
+  }
+
+  lastAmpHrs = ampHrs;
+  lastVoltage = voltage;
+  carData.wattHrs = wattHrsTotal;
+
+  // Save the values to flash if it's time
+  if (millis() - energySaveTimer >= energySaveInterval)
+  {
+    energyPrefs.putDouble("wattHrs", wattHrsTotal);
+    energyPrefs.putFloat("ampHrs", ampHrs);
+    energySaveTimer = millis();
+  }
+}
+
+void resetBatteryWindow()
+{
+  battCount = 0;
+  battSumI = battSumV = battSumII = battSumVV = battSumIV = 0;
+  battWindowStart = millis();
+}
+
+// Collect current and voltage, and update the estimate at the end of each window
+// The last good estimate is kept until a new one passes the checks
+void updateBatteryEstimate()
+{
+  float current = carData.current;
+  float voltage = carData.voltage;
+
+  // Use a linear regression of the relationship between voltage and current
+  // over the window to estimate resistance and sagging voltage
+  // The slope of the line is -resistance, and the point at 0 current is the resting voltage
+  if (!isnan(current) && !isnan(voltage) && voltage > 5)
+  {
+    battCount++;
+    battSumI += current;
+    battSumV += voltage;
+    battSumII += current * current;
+    battSumVV += voltage * voltage;
+    battSumIV += current * voltage;
+  }
+
+  if (millis() - battWindowStart < battWindow)
+    return;
+
+  if (battCount >= battMinSamples)
+  {
+    double meanI = battSumI / battCount;
+    double meanV = battSumV / battCount;
+    double sii = battSumII - battCount * meanI * meanI;
+    double svv = battSumVV - battCount * meanV * meanV;
+    double siv = battSumIV - battCount * meanI * meanV;
+
+    if (sqrt(sii / battCount) >= battMinCurrentStd && svv > 0 && siv * siv / (sii * svv) >= battMinR2)
+    {
+      double slope = siv / sii;
+      carData.restVoltage = meanV - slope * meanI;
+      carData.resistance = -slope;
+    }
+  }
+
+  resetBatteryWindow();
+}
+
+void initADCs()
+{
+  if (!adc1.begin())
+  {
     fatalError("ADC1 Initialization Error");
   }
 
-  if (!adc2.begin()) {
+  if (!adc2.begin())
+  {
     fatalError("ADC2 Initialization Error");
   }
 
@@ -353,8 +515,10 @@ void initADCs() {
 
 // Convert a raw ADC reading of a thermistor voltage divider into degrees C
 // This assumes the divider is powered by the ADC's full scale voltage (4.096v) // TODO: Fix this
-float thermistor(float rawReading) {
-  if (rawReading <= 0) {
+float thermistor(float rawReading)
+{
+  if (rawReading <= 0)
+  {
     return NAN;
   }
 
@@ -364,10 +528,11 @@ float thermistor(float rawReading) {
   float logR = logf(resistance);
   float kelvin = 1.0f / (steinhartA + steinhartB * logR + steinhartC * powf(logR, 3));
 
-  return kelvin - 273.15;  // Convert to Celsius
+  return kelvin - 273.15; // Convert to Celsius
 }
 
-void getAnalog() {
+void getAnalog()
+{
   // Throttle and brake
   // The ADC goes from 0 to 32767, map values are changed to fit the sensor range
   // The output is 0 to 1000 (the brake sensor reads backwards, so it's flipped)
@@ -382,14 +547,17 @@ void getAnalog() {
   carData.batt4 = thermistor(adc1.readRawCH(3));
 }
 
-void initSD() {
-  if (!SD.begin(sdChipSelect)) {
+void initSD()
+{
+  if (!SD.begin(sdChipSelect))
+  {
     fatalError("SD Initialization Error");
   }
 }
 
 // Helper to convert a packet to a CSV line
-String packetToString(const TelemetryPacket &packet) {
+String packetToString(const TelemetryPacket &packet)
+{
   String s = "";
   s += String(packet.id) + ",";
   s += String(packet.timestamp) + ",";
@@ -398,6 +566,9 @@ String packetToString(const TelemetryPacket &packet) {
   s += String(packet.current) + ",";
   s += String(packet.speed) + ",";
   s += String(packet.distance) + ",";
+  s += String(packet.wattHrs) + ",";
+  s += String(packet.restVoltage, 3) + ",";
+  s += String(packet.resistance, 4) + ",";
   s += (packet.fix ? "True" : "False") + String(",");
   s += String(packet.gpsX) + ",";
   s += String(packet.gpsY) + ",";
@@ -417,32 +588,39 @@ String packetToString(const TelemetryPacket &packet) {
   return s;
 }
 
-void writeData() {
+void writeData()
+{
   // Open the file. Note that only one file can be open at a time
   File dataFile = SD.open(logFileName, FILE_APPEND);
 
-  if (dataFile) {
+  if (dataFile)
+  {
     digitalWrite(dataLight, HIGH);
 
-    dataFile.println(packetToString(carData));  // Append the file
+    dataFile.println(packetToString(carData)); // Append the file
     dataFile.close();
 
     digitalWrite(dataLight, LOW);
-  } else {
+  }
+  else
+  {
     fatalError("Error opening data file");
   }
 }
 
-void onDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
+void onDataSent(const uint8_t *macAddr, esp_now_send_status_t status)
+{
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-void initRF() {
+void initRF()
+{
   // Wifi mode for esp-now
   WiFi.mode(WIFI_STA);
 
   // Start wifi to set configuration
-  if (esp_wifi_start() != ESP_OK) {
+  if (esp_wifi_start() != ESP_OK)
+  {
     fatalError("WiFi start failed");
   }
 
@@ -450,13 +628,14 @@ void initRF() {
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
 
   // Override data rate to lowest possible
-  //esp_wifi_config_espnow_rate(WIFI_IF_STA, WIFI_PHY_RATE_LORA_250K);
+  // esp_wifi_config_espnow_rate(WIFI_IF_STA, WIFI_PHY_RATE_LORA_250K);
 
   // Set max power (units of 0.25 dBm, so 80 = 20 dBm)
   esp_wifi_set_max_tx_power(80);
 
   // Init ESP-NOW
-  if (esp_now_init() != ESP_OK) {
+  if (esp_now_init() != ESP_OK)
+  {
     fatalError("Error initializing ESP-NOW");
   }
 
@@ -471,28 +650,32 @@ void initRF() {
   peerInfo.encrypt = false;
 
   // Add peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+  if (esp_now_add_peer(&peerInfo) != ESP_OK)
+  {
     fatalError("Failed to add esp_now peer");
   }
 }
 
-void transmitData() {
+void transmitData()
+{
   // Send it!
   digitalWrite(dataLight, HIGH);
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&carData, sizeof(carData));
   digitalWrite(dataLight, LOW);
 
-  if (result != ESP_OK) {
+  if (result != ESP_OK)
+  {
     warning("Error transmitting data");
   }
 }
 
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
+{
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-
-void setup() {
+void setup()
+{
   // Start usb serial
   Serial.begin(115200);
 
@@ -508,44 +691,54 @@ void setup() {
   initRF();
 
   // Start CA Serial
-  caSerial.begin(9600, SERIAL_8N1, 27, 14);  // use pins 27 and 14
+  caSerial.begin(9600, SERIAL_8N1, 27, 14); // use pins 27 and 14
 
   // Start GPS serial
-  Serial2.begin(9600, SERIAL_8N1, 16, 17);  // use pins 16 and 17 (EP 8 and 7)
+  Serial2.begin(9600, SERIAL_8N1, 16, 17); // use pins 16 and 17 (EP 8 and 7)
   gps.begin(9600);
 
   // Configure gps module
-  delay(500);                                    // Wait for the gps to boot
-  gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);  // Output RMC and GGA
-  gps.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);     // Output at 5 hz
+  delay(500);                                   // Wait for the gps to boot
+  gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA); // Output RMC and GGA
+  gps.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);    // Output at 5 hz
 
   // Start IMU, SD, and ADC Connections
   initIMU();
   initSD();
   initADCs();
 
+  // Load the saved energy totals and start the first battery estimate window
+  initEnergy();
+  resetBatteryWindow();
+
   // Throw away anything received during setup
-  while (caSerial.available()) caSerial.read();
-  while (Serial2.available()) Serial2.read();
+  while (caSerial.available())
+    caSerial.read();
+  while (Serial2.available())
+    Serial2.read();
 }
 
-void loop() {
+void loop()
+{
   // Timing is based off of GPS and CA messages
   // Each loop reads incoming characters until both have a complete message
   readCA();
   char c = gps.read();
 
   // Log gps message if needed
-  if (uartDebug && c) {
+  if (uartDebug && c)
+  {
     Serial.write(c);
   }
 
   // If we don't have a CA or a GPS message, wait
-  if (!gps.newNMEAreceived() || !haveCA) {
+  if (!gps.newNMEAreceived() || !haveCA)
+  {
     // Send a warning if it has been over a second since complete data
-    if (millis() - uartWarnTimer >= 1000) {
+    if (millis() - uartWarnTimer >= 1000)
+    {
       warning("Over 1 second since last full UART!");
-      uartWarnTimer = millis();  // Reset the uart warning timer
+      uartWarnTimer = millis(); // Reset the uart warning timer
     }
     return;
   }
@@ -558,6 +751,10 @@ void loop() {
   getGPS();
   getCA();
   getAnalog();
+
+  // Values calculated from the CA data
+  updateEnergy();
+  updateBatteryEstimate();
 
   // Output the data for debug
   Serial.println(packetToString(carData));
