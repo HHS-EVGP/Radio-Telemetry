@@ -87,9 +87,11 @@ Next you need to set up the Python environment.
     source pyenv/bin/activate
     pip install pyserial flask flask-sse redis gevent gunicorn
 
-At this point, if you are using Linux, you can simply run the startup script. Make sure that you specify your hotspot information (`IFACE`, `SSID`, and `PASSWRD`) in `BaseStation/wifiConfig.sh`, set `RANDOM_DATA = False` at the top of `BaseStation/station.py`, and plug in the programmed receiver ESP32.
+At this point, if you are using Linux, you can simply run the startup script. Make sure that you specify your hotspot information (`IFACE`, `SSID`, and `PASSWRD`) in `BaseStation/wifiConfig.sh` and plug in the programmed receiver ESP32.
 
     BaseStation/startup.sh
+
+The startup script runs `BaseStation/station.py`, which is used alongside the esp32 receiver. Alternativley, you can run `BaseStation/dummydata.py`, which sends plausible data to the frontend for testing.
 
 Now the server should be running, and you can go to its IP address on **port 5000** in a web browser. Some example addresses include:
 

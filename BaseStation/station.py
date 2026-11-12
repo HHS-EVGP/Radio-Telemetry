@@ -2,16 +2,12 @@ import os
 import sqlite3
 import time
 import json
-import random
 
 import redis
 import serial
 import serial.tools.list_ports
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "EVGPTelemetry.sqlite")
-
-# Toggle the random data feed during testing
-RANDOM_DATA = True
 
 # Car ids, these are also the database table names (keep in sync with webserver.py)
 CARS = ["blue_445", "red_111"]
@@ -95,23 +91,6 @@ def insert_data(table, data, con):
     con.commit()
 
 
-def random_data(car_id):
-    data = {field: random.uniform(0, 100) for field in DATA_FIELDS}
-    data["id"] = car_id
-    data["timestamp"] = time.time()
-    data["fix"] = random.choice([True, False])
-    return data
-
-
-def run_random_feed():
-    while True:
-        for car_id in CARS:
-            publish_telemetry(random_data(car_id))
-            time.sleep(1)
-
-        print("fake data sent")
-
-
 def connect_serial():
     # Keep trying until we find the receiver esp32 (by its USB to UART bridge chip)
     while True:
@@ -148,9 +127,6 @@ def handle_line(line, con):
 
 
 def main():
-    if RANDOM_DATA:
-        run_random_feed()
-
     con = sqlite3.connect(DB_PATH)
     for car_id in CARS:
         setup_table(car_id, con)
