@@ -1,341 +1,369 @@
 from flask import Flask, render_template, jsonify, request
-import sqlite3
 from datetime import datetime
 import time
-
+import threading
+import sqlite3
 import pickle
+import uuid
 import os
+import redis
+import json
+
+from flask_sse import sse
 
 app = Flask(__name__)
 
-## Global variables ##
-import sharedVars
+# Configure Redis backend for Flask-SSE
+# Telemetry events are triggered by station.py, timing events by this file
+app.config["REDIS_URL"] = "redis://localhost:6379/0"
+app.register_blueprint(sse, url_prefix='/stream')
 
-AUTHCODE = "hhsevgp" # Make this whatever you like
-authedUsrs = []
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
-endAmpHrs = None
-lapTime = None
-racing = False
-raceTime = None
-raceTimeMinutes = None
-paused = False
+REPO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+DB_PATH = os.path.join(REPO_ROOT, "BaseStation", "EVGPTelemetry.sqlite")
+RACEINFO_PATH = os.path.join(REPO_ROOT, "raceInfo.pkl")
 
-# Variables stored in raceInfo
-laps = None
-prevLapTimes = []
-whenRaceStarted = None
-pausedTime = 0
-whenPaused = None
+CARS = ["blue_445", "red_111"]  # Also the database table names (keep in sync with station.py)
+TIMING_INTERVAL = 0.2  # Seconds between timing broadcasts
+TELEMETRY_FRESHNESS = 5  # Seconds a car's last timestamp is trusted for lap boundaries
 
-# Restore pickled race data if applicable
-if os.path.exists("raceInfo.pkl"):
-    with open("raceInfo.pkl", "rb") as file:
+# gunicorn runs several workers, so race state lives in the pickle file (shared and
+# crash-safe), changes are serialized with a Redis lock, and only one worker
+# (the "leader") broadcasts timing events
+STATE_LOCK = "race_state_lock"
+LEADER_KEY = "timing_leader"
+WORKER_ID = uuid.uuid4().hex.encode()
+
+# Race and lap controls require this access code. Authenticated client IPs are
+# kept in Redis so every gunicorn worker sees them
+AUTH_CODE = "hhsevgp"  # Make this whatever you like
+AUTHED_USERS_KEY = "authed_users"
+
+# Clear the authenticated clients when the server restarts. Every gunicorn worker
+# runs this, but they share a parent process (the gunicorn master), so only the
+# first worker of a new server clears the list. A worker that gunicorn replaces
+# mid race has the same parent and leaves the list alone
+SERVER_KEY = "server_id"
+server_id = f"{os.getppid()}"
+if redis_client.set(SERVER_KEY, server_id, get=True) != server_id.encode():
+    redis_client.delete(AUTHED_USERS_KEY)
+
+# Latest telemetry seen per car: {car_id: {"timestamp", "received"}}
+latest_telemetry = {}
+
+
+## Race state persistence ##
+# State is None when no race has been started, otherwise:
+# {
+#   "started_at": server time the race started,
+#   "ended_at": server time the race was stopped, or None,
+#   "paused_at": server time the race was paused, or None,
+#   "paused_total": total seconds spent paused,
+#   "cars": {car_id: {
+#       "start_ts": car timestamp when the race started,
+#       "laps": [{"race_time": race time at the lap, "car_ts": car timestamp at the lap}]
+#   }}
+# }
+def load_state():
+    if not os.path.exists(RACEINFO_PATH):
+        return None
+    try:
+        with open(RACEINFO_PATH, "rb") as file:
+            return pickle.load(file)
+    except Exception as e:
+        print("Error unpickling race data:", e)
+        return None
+
+
+def save_state(state):
+    # Write to a temp file then swap it in so a crash never leaves a half written file
+    tmp_path = RACEINFO_PATH + ".tmp"
+    with open(tmp_path, "wb") as file:
+        pickle.dump(state, file)
+    os.replace(tmp_path, RACEINFO_PATH)
+
+
+## Timing helpers ##
+def race_status(state):
+    if state is None:
+        return "Not Started"
+    if state["ended_at"] is not None:
+        return "Finished"
+    if state["paused_at"] is not None:
+        return "Paused"
+    return "Running"
+
+
+def race_elapsed(state, now):
+    end = state["ended_at"] or state["paused_at"] or now
+    return max(0.0, end - state["started_at"] - state["paused_total"])
+
+
+def format_time(seconds):
+    if seconds is None:
+        return None
+    tenths = int(seconds * 10)
+    minutes, tenths = divmod(tenths, 600)
+    return f"{minutes}:{tenths // 10:02d}.{tenths % 10}"
+
+
+def car_timestamp(car_id):
+    # Use the car's own clock when possible so lap boundaries line up with the
+    # timestamps stored in the database. Fall back to server time if the car is quiet
+    car = latest_telemetry.get(car_id)
+    if car and car["timestamp"] is not None and time.time() - car["received"] < TELEMETRY_FRESHNESS:
+        return car["timestamp"]
+    else:
+        return time.time()
+
+
+def build_timing(state):
+    now = time.time()
+    status = race_status(state)
+    elapsed = race_elapsed(state, now) if state else None
+
+    timing = {
+        "sysTime": datetime.now().strftime("%H:%M:%S"),
+        "status": status,
+        "raceTime": format_time(elapsed),
+        "raceSeconds": elapsed,  # Unformatted race time, used by the dashboard's pace metrics
+        "raceStartedAt": state["started_at"] if state else None,  # Identifies the race
+        "cars": {},
+    }
+
+    for car_id in CARS:
+        car_info = {
+            "laps": None,
+            "lapTime": None,
+            "lastLapTime": None,
+            "fastestLapTime": None,
+        }
+
+        if state is not None:
+            # Race time at the end of each completed lap. Each lap time is the
+            # difference from the previous mark (the first lap starts at 0)
+            lap_marks = [lap["race_time"] for lap in state["cars"][car_id]["laps"]]
+            lap_times = [b - a for a, b in zip([0.0] + lap_marks, lap_marks)]
+
+            car_info["laps"] = len(lap_marks)
+            car_info["lapTime"] = format_time(elapsed - (lap_marks[-1] if lap_marks else 0.0))
+            if lap_times:
+                car_info["lastLapTime"] = format_time(lap_times[-1])
+                car_info["fastestLapTime"] = format_time(min(lap_times))
+
+        timing["cars"][car_id] = car_info
+
+    return timing
+
+
+def publish_timing(state):
+    redis_client.publish('sse', json.dumps({
+        "type": "timing",
+        "data": build_timing(state)
+    }))
+
+
+## Database lap association ##
+def sync_db_laps(car_id, car_state, end_ts=None):
+    # Rewrite the laps column for this race from the lap boundaries, so lap+ and
+    # lap- (corrections) both leave the database consistent. Points in the
+    # current lap stay NULL until the next lap change or the end of the race
+    if not os.path.exists(DB_PATH):
+        return
+
+    # Car timestamps where each lap starts. Lap n (counting from 0) is every
+    # point from bounds[n] up to, but not including, bounds[n + 1]
+    bounds = [car_state["start_ts"]] + [lap["car_ts"] for lap in car_state["laps"]]
+    con = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        with con:  # One transaction, committed at the end
+            for lap, (start, end) in enumerate(zip(bounds, bounds[1:])):
+                con.execute(f"UPDATE {car_id} SET laps = ? WHERE timestamp >= ? AND timestamp < ?",
+                            [lap, start, end])
+
+            # The lap in progress: cleared (in case a lap- removed its end), or closed off when the race ends
+            if end_ts is None:
+                con.execute(f"UPDATE {car_id} SET laps = NULL WHERE timestamp >= ?", [bounds[-1]])
+            else:
+                con.execute(f"UPDATE {car_id} SET laps = ? WHERE timestamp >= ? AND timestamp <= ?",
+                            [len(bounds) - 1, bounds[-1], end_ts])
+    except sqlite3.Error as e:
+        print(f"Error updating laps in {car_id}:", e)
+    finally:
+        con.close()
+
+
+## Race control ##
+def change_state(action):
+    # Apply a change to the race state. Returns (state, error message or None)
+    # action is "start", "stop", "pause", "resume", or "lap:<car_id>:<plus|minus>"
+    with redis_client.lock(STATE_LOCK, timeout=10, blocking_timeout=10):
+        state = load_state()
+        status = race_status(state)
+        now = time.time()
+
+        if action == "start":
+            if status in ("Running", "Paused"):
+                return state, "Race already started"
+            state = {
+                "started_at": now,
+                "ended_at": None,
+                "paused_at": None,
+                "paused_total": 0.0,
+                "cars": {car_id: {"start_ts": car_timestamp(car_id), "laps": []} for car_id in CARS},
+            }
+
+        elif action == "stop":
+            if status not in ("Running", "Paused"):
+                return state, "Race not started"
+            if state["paused_at"] is not None:
+                state["paused_total"] += now - state["paused_at"]
+                state["paused_at"] = None
+            state["ended_at"] = now
+            for car_id in CARS:
+                sync_db_laps(car_id, state["cars"][car_id], end_ts=car_timestamp(car_id))
+
+        elif action == "pause":
+            if status != "Running":
+                return state, "Race not running"
+            state["paused_at"] = now
+
+        elif action == "resume":
+            if status != "Paused":
+                return state, "Race not paused"
+            state["paused_total"] += now - state["paused_at"]
+            state["paused_at"] = None
+
+        elif action.startswith("lap"):
+            _, car_id, delta = action.split(":")
+            if status not in ("Running", "Paused"):
+                return state, "Race not started"
+            car_state = state["cars"][car_id]
+
+            if delta == "plus":
+                # Never put a lap boundary before the previous one, which could
+                # happen if the car's clock jumps or we fall back to server time
+                prev_ts = car_state["laps"][-1]["car_ts"] if car_state["laps"] else car_state["start_ts"]
+                car_state["laps"].append({
+                    "race_time": race_elapsed(state, now),
+                    "car_ts": max(car_timestamp(car_id), prev_ts),
+                })
+            elif car_state["laps"]:
+                car_state["laps"].pop()
+            else:
+                return state, "No laps to remove"
+
+            sync_db_laps(car_id, car_state)
+
+        save_state(state)
+
+    publish_timing(state)
+    return state, None
+
+
+def respond(action):
+    state, error = change_state(action)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(build_timing(state))
+
+
+## Authentication ##
+def is_authed():
+    return bool(redis_client.sismember(AUTHED_USERS_KEY, request.remote_addr))
+
+
+@app.route("/auth", methods=["GET", "POST"])
+def auth():
+    if request.method == "POST":
+        if request.get_data(as_text=True) != AUTH_CODE:
+            return jsonify({"error": "Incorrect access code", "authed": False}), 401
+        redis_client.sadd(AUTHED_USERS_KEY, request.remote_addr)
+    return jsonify({"authed": is_authed()})
+
+
+@app.route("/race/<action>", methods=["POST"])
+def race_control(action):
+    if not is_authed():
+        return jsonify({"error": "Not authenticated"}), 401
+    if action not in ("start", "stop", "pause", "resume"):
+        return jsonify({"error": "Invalid race action"}), 404
+    return respond(action)
+
+
+@app.route("/laps/<car_id>/<delta>", methods=["POST"])
+def lap_control(car_id, delta):
+    if not is_authed():
+        return jsonify({"error": "Not authenticated"}), 401
+    if car_id not in CARS or delta not in ("plus", "minus"):
+        return jsonify({"error": "Invalid lap action"}), 404
+    return respond(f"lap:{car_id}:{delta}")
+
+
+## Periodic timing broadcast ##
+def is_leader():
+    # Claim leadership if nobody holds it, or renew it if we already do. The key
+    # expires after 2 seconds, so another worker takes over if the leader dies
+    if redis_client.set(LEADER_KEY, WORKER_ID, nx=True, ex=2):
+        return True
+    if redis_client.get(LEADER_KEY) == WORKER_ID:
+        redis_client.expire(LEADER_KEY, 2)
+        return True
+    return False
+
+
+def record_telemetry(message):
+    try:
+        event = json.loads(message["data"])
+        if event.get("type") != "telemetry":
+            return
+        data = event["data"]
+        latest_telemetry[data["id"]] = {
+            "timestamp": data.get("timestamp"),
+            "received": time.time(),
+        }
+    except (ValueError, KeyError, TypeError):
+        pass
+
+
+def timing_loop():
+    pubsub = None
+    while True:
         try:
-            raceInfo = pickle.load(file)
+            if pubsub is None:
+                pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+                pubsub.subscribe('sse')
 
-            if raceInfo is not None:
-                racing = True
-                laps = raceInfo['laps']
-                prevLapTimes = raceInfo['prev_laptimes']
-                whenRaceStarted = raceInfo['when_race_started']
-                pausedTime = raceInfo['paused_time']
-                whenPaused = raceInfo['when_paused']
+            # Track telemetry from station.py until it's time for the next broadcast
+            next_tick = time.time() + TIMING_INTERVAL
+            while (remaining := next_tick - time.time()) > 0:
+                message = pubsub.get_message(timeout=remaining)
+                if message:
+                    record_telemetry(message)
 
-                if whenPaused is not None:
-                    paused = True
-                    racing = False
+            if is_leader():
+                publish_timing(load_state())
 
         except Exception as e:
-            print("Error unpickling race data:", e)
-            racing = False
-            laps = None
-            prevLapTimes = []
-            whenRaceStarted = None
-            pausedTime = 0
-            whenPaused = None
+            print("Timing loop error:", e)
+            try:
+                if pubsub is not None:
+                    pubsub.close()
+            except Exception:
+                pass
+            pubsub = None
+            time.sleep(1)
 
 
-# Function to clean up data for display
-def cleanView(var, lenth):
-    if var is not None and var != 'Error':
-        var = format(var, f".{lenth}f")
-    return var
+threading.Thread(target=timing_loop, daemon=True).start()
 
-# Attach cleanView to the Flask app
-app.cleanView = cleanView
-
-# Page to serve a json with data
-@app.route("/getdata")
-def getData():
-    global data, laps, lapTime, racing, whenRaceStarted, raceTime, raceTimeMinutes, prevLapTimes, timestamp, pausedTime, endAmpHrs, paused
-
-    # Unpack the data
-    timestamp, ampHrs, voltage, current, speed, miles, gpsFix, gpsX, gpsY, \
-        throttle, brakePedal, motorTemp, batt1, batt2, batt3, batt4, ambientTemp, \
-        rool, pitch, heading, altitude = sharedVars.data
-
-    # Calculate current race time
-    if racing and timestamp is not None:
-        raceTime = timestamp - whenRaceStarted - pausedTime
-
-        # Calculate racetime_minutes if needed
-        if raceTime >= 60:
-            raceTimeMinutes = raceTime // 60
-            raceTime = raceTime - raceTimeMinutes * 60
-
-            # Convert racetime minutes to M:
-            raceTimeMinutes = str(format(raceTimeMinutes, ".0f"))+":"
-
-        # Format racetime
-        if raceTime < 10 and raceTimeMinutes is not None:
-            raceTime = format(raceTime, ".1f")
-            raceTime = "0"+str(raceTime)
-        else:
-            raceTime = format(raceTime, ".1f")
-
-    # Calculate current lap time
-    if racing and timestamp is not None:
-        lapTime = timestamp - whenRaceStarted - sum(prevLapTimes) - pausedTime
-
-    # Estimate total amp hours that will be used in the race
-    if racing and ampHrs is not None and timestamp is not None \
-    or paused and ampHrs is not None and timestamp is not None:
-        rawRaceTime = timestamp - whenRaceStarted - pausedTime
-
-        # Formula derived from amp_hours/rawRacetime = endAmphrs/3600
-        # Assuming a 60 minute race
-        if rawRaceTime != 0:
-            endAmpHrs = ampHrs * (3600 / rawRaceTime)
-
-    return jsonify(
-        # Statuses
-        systime=datetime.now().strftime("%H:%M:%S"),
-        timestamp=time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp is not None else None,
-        throttle=cleanView(throttle, 3),
-        brakePedal=cleanView(brakePedal, 3),
-
-        # Temps
-        motorTemp=cleanView(motorTemp, 3),
-        batt1=cleanView(batt1, 3),
-        batt2=cleanView(batt2, 3),
-        batt3=cleanView(batt3, 3),
-        batt4=cleanView(batt4, 3),
-        ambientTemp=cleanView(ambientTemp, 3),
-
-        # CA
-        ampHrs=cleanView(ampHrs, 3),
-        endAmpHrs=cleanView(endAmpHrs, 3),
-        voltage=cleanView(voltage, 3),
-        current=cleanView(current, 3),
-        speed=cleanView(speed, 3),
-        miles=cleanView(miles, 3),
-
-        # Position
-        gpsFix=gpsFix,
-        gpsX=cleanView(gpsX, 3),
-        gpsY=cleanView(gpsY, 3),
-        rool=cleanView(rool, 3),
-        pitch=cleanView(pitch, 3),
-        heading=cleanView(heading, 3),
-        altitude=cleanView(altitude, 3),
-
-        # Race info
-        laps=laps,
-        lapTime=cleanView(lapTime, 1),
-        lastLapTime=cleanView(float(prevLapTimes[-1]), 1) if len(prevLapTimes) != 0 else None,
-        fastestLapTime=cleanView(float(min(prevLapTimes)), 1) if len(prevLapTimes) != 0 else None,
-        raceTime=raceTime,
-        raceTimeMinutes=raceTimeMinutes,
-        racing=racing,
-        paused=paused,
-        authed=True if request.remote_addr in authedUsrs else False
-    )
-
-
-# Respond to an authentication attempt
-@app.route("/usrauth", methods=['POST'])
-def usrAuth():
-    global authedUsrs, AUTHCODE
-    authAttempt = request.get_data(as_text=True)
-
-    if authAttempt == AUTHCODE:
-        if request.remote_addr not in authedUsrs:
-            authedUsrs.append(request.remote_addr)
-        return ('', 200)
-    else:
-        return ('Invalid authentication code', 401)
-
-
-# Respond to an updated variable
-@app.route("/usrupdate", methods=['POST'])
-def usrUpdate():
-    global authedUsrs, laps, lapTime, prevLapTimes, racing, whenRaceStarted, raceTime, raceTimeMinutes, paused, pausedTime, whenPaused, endAmpHrs
-
-    # Check if the user is authenticated
-    if request.remote_addr not in authedUsrs:
-        return 'User not authenticated', 401
-
-    # Check for command
-    command = request.get_data(as_text=True)
-    if not command:
-        return 'No variable update command', 400
-
-    con = sqlite3.connect(sharedVars.DBPATH)
-    cur = con.cursor()
-
-    if command == 'lap+' and racing:
-        # Store the previous lap number in the database
-        cur.execute("UPDATE main SET laps = ? WHERE time > ? AND laps IS NULL"
-        ,[laps, whenRaceStarted])
-        con.commit()
-
-        # Increment the lap number
-        laps += 1
-        if lapTime is not None:
-            prevLapTimes.append(lapTime)
-        lapTime = 0
-
-        # Update file dump
-        raceInfo = {
-            'laps': laps,
-            'prev_laptimes': prevLapTimes,
-            'when_race_started': whenRaceStarted,
-            'paused_time': pausedTime,
-            'when_paused': whenPaused
-            }
-
-        with open("raceInfo.pkl", "wb") as file:
-            pickle.dump(raceInfo, file)
-
-        return ('Play Sound', 200)
-
-    elif command == 'lap-' and racing:
-
-        if laps > 0:
-            # Remove all instances of the lap count
-            cur.execute("UPDATE main SET laps = NULL WHERE time > ? AND laps = ?"
-                        ,(whenRaceStarted, laps,))
-            con.commit()
-
-            laps -= 1
-
-            # Remove the previous lap time from the list
-            prevLapTimes.pop()
-
-            # Update file dump
-            raceInfo = {
-                'laps': laps,
-                'prev_laptimes': prevLapTimes,
-                'when_race_started': whenRaceStarted,
-                'paused_time': pausedTime,
-                'when_paused': whenPaused
-                }
-
-            with open("raceInfo.pkl", "wb") as file:
-                pickle.dump(raceInfo, file)
-
-        return ('', 200)
-
-    elif command == 'pauseunpause':
-        if not racing and not paused:
-            return ("Not racing!", 400)
-
-        if not paused:
-            paused = True
-            racing = False
-
-            whenPaused = timestamp
-
-        else:
-            paused = False
-            racing = True
-
-            pausedTime += timestamp - whenPaused
-            whenPaused = None
-
-        # Update file dump
-        raceInfo = {
-            'laps': laps,
-            'prev_laptimes': prevLapTimes,
-            'when_race_started': whenRaceStarted,
-            'paused_time': pausedTime,
-            'when_paused': whenPaused
-            }
-
-        with open("raceInfo.pkl", "wb") as file:
-            pickle.dump(raceInfo, file)
-
-        return ('', 200)
-
-    elif command == 'togglerace':
-        if racing or paused:
-            racing = False
-
-            # Reset to default values
-            laps = None
-            lapTime = None
-            prevLapTimes = []
-            raceTime = None
-            raceTimeMinutes = None
-            whenRaceStarted = None
-            pausedTime = 0
-            paused = False
-            endAmpHrs = None
-
-            # Write file dump as None
-            with open("raceInfo.pkl", "wb") as file:
-                pickle.dump(None, file)
-
-            return ('', 200)
-
-        else:
-
-            # Tie whenRaceStarted to the current timestamp
-            whenRaceStarted = timestamp
-
-            #cur.execute("SELECT MAX(time) FROM main")
-            #whenRaceStarted = cur.fetchone()[0]
-
-            # If we don't have a current value, return an error
-            if whenRaceStarted == None:
-                return ("No data! Unable to start race", 422)
-
-            # Initiate laps
-            laps = 0
-
-            # Update file dump
-            raceInfo = {
-                'laps': laps,
-                'prev_laptimes': prevLapTimes,
-                'when_race_started': whenRaceStarted,
-                'paused_time': pausedTime,
-                'when_paused': whenPaused
-                }
-
-            with open("raceInfo.pkl", "wb") as file:
-                pickle.dump(raceInfo, file)
-
-            racing = True
-
-            return ('', 200)
-
-    else:
-        return 'Invalid variable update command', 400
 
 # Main Dashboard page
 @app.route("/")
 def dashboard():
     return render_template('dashboard.html')
 
-
-# Page for analyzing the car's path
-@app.route("/map")
-def map():
-    return render_template('map.html')
-
-
-# Debug page
-@app.route("/debug")
-def debug():
-    return render_template('debug.html')
+# Run the app for local testing
+if __name__ == '__main__':
+    app.run(threaded=True, debug=True, port=5000)
