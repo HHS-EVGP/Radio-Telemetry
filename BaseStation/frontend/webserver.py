@@ -25,7 +25,6 @@ DB_PATH = os.path.join(REPO_ROOT, "BaseStation", "EVGPTelemetry.sqlite")
 RACEINFO_PATH = os.path.join(REPO_ROOT, "raceInfo.pkl")
 
 CARS = ["blue_445", "red_111"]  # Also the database table names (keep in sync with station.py)
-RACE_LENGTH = 3600  # Seconds, used for the end amp hour estimate
 TIMING_INTERVAL = 0.2  # Seconds between timing broadcasts
 TELEMETRY_FRESHNESS = 5  # Seconds a car's last timestamp is trusted for lap boundaries
 
@@ -41,7 +40,16 @@ WORKER_ID = uuid.uuid4().hex.encode()
 AUTH_CODE = "hhsevgp"  # Make this whatever you like
 AUTHED_USERS_KEY = "authed_users"
 
-# Latest telemetry seen per car: {car_id: {"ampHrs", "timestamp", "received"}}
+# Clear the authenticated clients when the server restarts. Every gunicorn worker
+# runs this, but they share a parent process (the gunicorn master), so only the
+# first worker of a new server clears the list. A worker that gunicorn replaces
+# mid race has the same parent and leaves the list alone
+SERVER_KEY = "server_id"
+server_id = f"{os.getppid()}"
+if redis_client.set(SERVER_KEY, server_id, get=True) != server_id.encode():
+    redis_client.delete(AUTHED_USERS_KEY)
+
+# Latest telemetry seen per car: {car_id: {"timestamp", "received"}}
 latest_telemetry = {}
 
 
@@ -119,6 +127,8 @@ def build_timing(state):
         "sysTime": datetime.now().strftime("%H:%M:%S"),
         "status": status,
         "raceTime": format_time(elapsed),
+        "raceSeconds": elapsed,  # Unformatted race time, used by the dashboard's pace metrics
+        "raceStartedAt": state["started_at"] if state else None,  # Identifies the race
         "cars": {},
     }
 
@@ -128,7 +138,6 @@ def build_timing(state):
             "lapTime": None,
             "lastLapTime": None,
             "fastestLapTime": None,
-            "estEndAmpHrs": None,
         }
 
         if state is not None:
@@ -140,11 +149,6 @@ def build_timing(state):
             if lap_times:
                 car_info["lastLapTime"] = format_time(lap_times[-1])
                 car_info["fastestLapTime"] = format_time(min(lap_times))
-
-        # Linear extrapolation of amp hours used over the whole race
-        amp_hrs = latest_telemetry.get(car_id, {}).get("ampHrs")
-        if status in ("Running", "Paused") and amp_hrs is not None and elapsed > 0:
-            car_info["estEndAmpHrs"] = amp_hrs * (RACE_LENGTH / elapsed)
 
         timing["cars"][car_id] = car_info
 
@@ -311,7 +315,6 @@ def record_telemetry(message):
             return
         data = event["data"]
         latest_telemetry[data["id"]] = {
-            "ampHrs": data.get("ampHrs"),
             "timestamp": data.get("timestamp"),
             "received": time.time(),
         }

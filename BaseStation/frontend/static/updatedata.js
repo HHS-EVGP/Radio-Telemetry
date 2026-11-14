@@ -1,76 +1,82 @@
 // Initial state
 let eventSource = null;
 
-// Helper to set text content if element exists
-function setText(id, text) {
-  const elem = document.getElementById(id);
-  if (elem) {
-    elem.textContent = text ?? "NNN";
-  }
-}
-
-// Helper to set the text content padded correctly if it's a number
-const numFormatter = new Intl.NumberFormat("en-US", {
-  minimumIntegerDigits: 3,
-  minimumFractionDigits: 3,
-  maximumFractionDigits: 3,
-  useGrouping: false, // Prevents thousand separators like commas
-});
-
-function setNum(id, num) {
-  const elem = document.getElementById(id);
-  if (!elem) return;
-
-  // null/undefined (missing or NAN on the car) parse to NaN
-  const parsed = parseFloat(num);
-  elem.textContent = isNaN(parsed) ? "NNN" : numFormatter.format(parsed);
-}
-
-// Numeric telemetry fields. Each one is shown in the element with id <carId><field>
-const NUMERIC_FIELDS = [
-  "timestamp", "throttle", "brake",
-  "ambientTemp", "motorTemp", "batt1", "batt2", "batt3", "batt4",
-  "ampHrs", "voltage", "current", "speed", "distance",
-  "roll", "pitch", "heading", "altitude",
-  "gpsX", "gpsY",
-];
-
-// Temperatures that turn red above HOT_TEMP degrees C
-const WATCHED_TEMPS = ["motorTemp", "batt1", "batt2", "batt3", "batt4"];
-const HOT_TEMP = 50;
-
+//// Telemetry ////
 // Function to update the page when new data comes
 function updateDashboard(data, carId) {
   // Hide server warning since we got a live event
   const serverWarn = document.getElementById("serverWarn");
   if (serverWarn) serverWarn.style.display = "none";
 
-  NUMERIC_FIELDS.forEach((field) => setNum(carId + field, data[field]));
+  const car = carState(carId);
+  car.lastPacket = data;
+  car.lastReceived = Date.now();
 
-  WATCHED_TEMPS.forEach((field) => {
-    const elem = document.getElementById(carId + field);
-    if (elem) elem.style.color = data[field] > HOT_TEMP ? "red" : "";
-  });
+  // Set the content of each element
+  for (const [field, decimals] of Object.entries(NUMERIC_FIELDS)) {
+    let value = toNum(data[field]);
+    if (field === "throttle" || field === "brake") value /= PEDAL_SCALE; //
+    if (TEMP_FIELDS.includes(field) && value < DISCONNECTED_TEMP) value = NaN;
+    setNum(carId + field, value, decimals);
+  }
+
+  // Car clock time, null when the car has never had a GPS time
+  const timestamp = toNum(data.timestamp);
+  setText(carId + "timestamp", Number.isFinite(timestamp)
+    ? new Date(timestamp * 1000).toLocaleTimeString([], { hour12: false })
+    : "—");
 
   // Color and content of GPS fix status
-  const fixElem = document.getElementById(carId + "fix");
-  if (fixElem) {
-    fixElem.textContent = data.fix === true ? "Yes" : "No";
-    fixElem.style.color = data.fix === true ? "green" : "red";
+  if (data.fix === true) setPill(carId + "fix", "GPS fix", "green");
+  else setPill(carId + "fix", "No GPS fix", "red");
+
+  updateGauges(carId, data);
+  updateMetrics(carId, data);
+  renderMetrics(carId);
+  updateLiveStatus();
+  drawMap(carId);
+}
+
+function updateLiveStatus() {
+  for (const [carId, car] of Object.entries(cars)) {
+    if (car.lastReceived == null) {
+      setPill(carId + "live", "No data", "gray");
+      continue;
+    }
+    const age = (Date.now() - car.lastReceived) / 1000;
+    if (age < STALE_SECONDS) setPill(carId + "live", "Live", "green");
+    else if (age < OFFLINE_SECONDS) setPill(carId + "live", `Stale ${Math.round(age)}s`, "amber");
+    else setPill(carId + "live", "Offline", "red");
   }
 }
 
+
+//// Timing ////
 // Last race status from the server, used to decide what the race buttons do
 let raceStatus = "Not Started";
+
+const STATUS_TONES = { "Running": "green", "Paused": "amber", "Finished": "gray", "Not Started": "gray" };
 
 function updateTiming(data) {
   // Server time
   setText("sysTime", data.sysTime);
 
+  // A different race started (or the page just opened)
+  if ((data.raceStartedAt ?? null) !== race.startedAt) {
+    race.startedAt = data.raceStartedAt ?? null;
+    resetMetrics(race.startedAt);
+  }
+
+  race.status = data.status;
+  race.seconds = data.raceSeconds ?? null;
+  race.receivedAt = performance.now();
+
   // Shared race info
   raceStatus = data.status;
-  setText("raceStatus", data.status);
-  setText("raceTime", data.raceTime);
+  setPill("raceStatus", data.status, STATUS_TONES[data.status] ?? "gray");
+  setText("raceTime", data.raceTime ?? "0:00.0");
+  setText("raceRemaining", formatClock(RACE_SECONDS - (race.seconds ?? 0)));
+  setWidth("raceProgress", (race.seconds ?? 0) / RACE_SECONDS * 100);
 
   const started = raceStatus === "Running" || raceStatus === "Paused";
   const startStop = document.getElementById("raceStartStop");
@@ -87,11 +93,14 @@ function updateTiming(data) {
     setText(carId + "laps", car.laps);
     setText(carId + "lapTime", car.lapTime);
     setText(carId + "lastLapTime", car.lastLapTime);
+    setText(carId + "paceLastLap", car.lastLapTime);
     setText(carId + "fastestLapTime", car.fastestLapTime);
-    setNum(carId + "estEndAmpHrs", car.estEndAmpHrs);
+    updateLaps(carId, car.laps);
   }
 }
 
+
+//// Race control ////
 // Show the race controls if authenticated, otherwise show the access code form
 function showControls(authed) {
   document.querySelectorAll(".raceControls").forEach((elem) => {
@@ -174,6 +183,16 @@ async function changeLap(carId, delta) {
   }
 }
 
+
+//// Theme ////
+function toggleTheme() {
+  const dark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("theme", dark ? "dark" : "light");
+  drawAllMaps();
+  Object.keys(cars).forEach(drawLapChart);
+}
+
+
 // Connect to Server-Sent Events stream
 function connectSSE() {
   if (eventSource) {
@@ -218,5 +237,23 @@ function connectSSE() {
 // Start Server-Sent Events connection
 connectSSE();
 
-// Show the controls only if this client is already authenticated
-document.addEventListener("DOMContentLoaded", checkAuth);
+document.addEventListener("DOMContentLoaded", () => {
+  // Show the controls only if this client is already authenticated
+  checkAuth();
+
+  // Every car on the page gets its state, so the maps and charts can draw before data arrives
+  document.querySelectorAll("canvas[id$='map']").forEach((canvas) => carState(canvas.id.slice(0, -"map".length)));
+
+  buildSpeedTicks();
+  buildCurrentLegends();
+  Object.keys(cars).forEach(drawLapChart);
+  drawAllMaps();
+
+  document.querySelectorAll("[data-map-mode]").forEach((button) => {
+    button.addEventListener("click", () => setMapMode(button.dataset.car, button.dataset.mapMode));
+  });
+
+  window.addEventListener("resize", drawAllMaps);
+  setInterval(updateLiveStatus, 1000);
+  setInterval(saveMetrics, 5000);
+});

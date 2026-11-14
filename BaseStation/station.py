@@ -16,6 +16,7 @@ CARS = ["blue_445", "red_111"]
 # The names match the packet fields in the car firmware and the JSON from the receiver
 DATA_FIELDS = [
     "ampHrs", "voltage", "current", "speed", "distance",
+    "wattHrs", "restVoltage", "resistance",
     "fix", "gpsX", "gpsY",
     "throttle", "brake", "motorTemp", "batt1", "batt2", "batt3", "batt4",
     "ambientTemp", "roll", "pitch", "heading", "altitude",
@@ -35,6 +36,9 @@ def setup_table(table, con):
             current REAL,
             speed REAL,
             distance REAL,
+            wattHrs REAL,
+            restVoltage REAL,
+            resistance REAL,
             fix INTEGER,
             gpsX REAL,
             gpsY REAL,

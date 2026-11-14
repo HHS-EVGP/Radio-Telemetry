@@ -1,38 +1,155 @@
 @import "tailwindcss";
 
+/* Dark mode follows the "dark" class on <html>, set by the theme toggle */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-hhsblue: #061045;
   --color-hhsred: #940000;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
 }
 
 @layer base {
-  h1 {
-    @apply text-3xl
+  :root {
+    /* Colors the JavaScript charts read, so they follow the theme */
+    --chart-grid: var(--color-slate-200);
+    --chart-text: var(--color-slate-500);
+    --chart-track: var(--color-slate-300);
+    color-scheme: light;
   }
 
-  h2 {
-    @apply text-2xl
+  .dark {
+    --chart-grid: var(--color-slate-800);
+    --chart-text: var(--color-slate-400);
+    --chart-track: var(--color-slate-700);
+    color-scheme: dark;
   }
 
-  button, input {
-    @apply p-2 border-2 border-black
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  .car-blue {
+    --car: var(--color-blue-500);
+  }
+
+  .car-red {
+    --car: var(--color-red-500);
   }
 }
 
 @layer components {
   .serverwarn {
-    @apply w-full bg-red-500 font-black p-5 text-3xl text-center top-0 sticky
+    @apply sticky top-0 z-50 w-full bg-red-600 px-4 py-2 text-center text-sm font-bold text-white;
   }
 
-  .split {
-    @apply flex flex-col md:flex-row justify-around items-center p-5 space-y-5 md:space-y-0 md:space-x-5
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900;
   }
 
-  .half {
-    @apply flex flex-col items-center justify-center space-y-3 p-5 text-center w-full h-full rounded-[4rem]
+  .card-title {
+    @apply mb-3 flex items-center justify-between gap-2 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400;
   }
 
-  .timebar {
-    @apply w-full bg-gray-700 absolute bottom-0
+  .stat-label {
+    @apply text-xs text-slate-500 dark:text-slate-400;
+  }
+
+  .stat-value {
+    @apply font-mono text-lg font-semibold tabular-nums;
+  }
+
+  .unit {
+    @apply ml-0.5 text-xs font-normal text-slate-500 dark:text-slate-400;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700;
+  }
+
+  .btn-primary {
+    @apply border-transparent bg-blue-600 text-white hover:bg-blue-500 dark:border-transparent dark:bg-blue-600 dark:hover:bg-blue-500;
+  }
+
+  .input {
+    @apply rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+  }
+
+  .pill-gray {
+    @apply bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300;
+  }
+
+  .pill-green {
+    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400;
+  }
+
+  .pill-amber {
+    @apply bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400;
+  }
+
+  .pill-red {
+    @apply bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400;
+  }
+
+  .meter {
+    @apply relative h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800;
+  }
+
+  .meter-fill {
+    @apply absolute inset-y-0 left-0 rounded-full bg-emerald-500 transition-[width] duration-300;
+  }
+
+  /* A thin line on a meter, like the budget or the allowed power */
+  .meter-mark {
+    @apply absolute inset-y-0 w-0.5 bg-slate-900 dark:bg-white;
+  }
+
+  .pedal {
+    @apply relative overflow-hidden rounded-md bg-slate-200 dark:bg-slate-800;
+  }
+
+  .pedal-fill {
+    @apply absolute inset-x-0 bottom-0 transition-[height] duration-150;
+  }
+
+  .segmented {
+    @apply inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800;
+  }
+
+  .segmented button {
+    @apply rounded-md px-2 py-0.5 text-xs font-medium text-slate-500 normal-case dark:text-slate-400;
+  }
+
+  .segmented button[aria-pressed="true"] {
+    @apply bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white;
+  }
+
+  .text-good {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+
+  .text-warn {
+    @apply text-amber-600 dark:text-amber-400;
+  }
+
+  .text-bad {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  .bg-good {
+    @apply bg-emerald-500;
+  }
+
+  .bg-warn {
+    @apply bg-amber-500;
+  }
+
+  .bg-bad {
+    @apply bg-red-500;
   }
 }
