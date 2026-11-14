@@ -141,6 +141,8 @@ def build_timing(state):
         }
 
         if state is not None:
+            # Race time at the end of each completed lap. Each lap time is the
+            # difference from the previous mark (the first lap starts at 0)
             lap_marks = [lap["race_time"] for lap in state["cars"][car_id]["laps"]]
             lap_times = [b - a for a, b in zip([0.0] + lap_marks, lap_marks)]
 
@@ -170,14 +172,17 @@ def sync_db_laps(car_id, car_state, end_ts=None):
     if not os.path.exists(DB_PATH):
         return
 
+    # Car timestamps where each lap starts. Lap n (counting from 0) is every
+    # point from bounds[n] up to, but not including, bounds[n + 1]
     bounds = [car_state["start_ts"]] + [lap["car_ts"] for lap in car_state["laps"]]
     con = sqlite3.connect(DB_PATH, timeout=5)
     try:
-        with con:
+        with con:  # One transaction, committed at the end
             for lap, (start, end) in enumerate(zip(bounds, bounds[1:])):
                 con.execute(f"UPDATE {car_id} SET laps = ? WHERE timestamp >= ? AND timestamp < ?",
                             [lap, start, end])
 
+            # The lap in progress: cleared (in case a lap- removed its end), or closed off when the race ends
             if end_ts is None:
                 con.execute(f"UPDATE {car_id} SET laps = NULL WHERE timestamp >= ?", [bounds[-1]])
             else:

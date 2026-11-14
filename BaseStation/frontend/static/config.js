@@ -113,7 +113,7 @@ function formatLapTime(seconds) {
   return `${minutes}:${String(Math.floor(rest / 10)).padStart(2, "0")}.${rest % 10}`;
 }
 
-// Function for extracting values form the stylesheet, so that canvases can match the theme
+// Function for extracting values from the stylesheet, so that canvases can match the theme
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }

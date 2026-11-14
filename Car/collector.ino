@@ -98,7 +98,7 @@ const int battMinSamples = 40;
 const float battMinCurrentStd = 4; // Amps, needs enough change in current to see the sag
 const float battMinR2 = 0.6;       // How cleanly the line has to fit
 unsigned long battWindowStart = 0;
-int battCount = 0;
+int battSampleCount = 0;
 double battSumI = 0, battSumV = 0, battSumII = 0, battSumVV = 0, battSumIV = 0;
 
 // Receiver mac address
@@ -275,6 +275,7 @@ double degToRad(double deg)
 void getGPS()
 {
   // Attempt to parse gps message
+  // (lastNMEA() also clears newNMEAreceived(), so loop() waits for the next sentence)
   bool parsed = gps.parse(gps.lastNMEA());
 
   // Give a warning if the parse fails after the first second
@@ -424,12 +425,13 @@ void updateEnergy()
 
   if (isnan(lastAmpHrs) || ampHrs < lastAmpHrs - caResetAh)
   {
-    // No saved total, or the CA's amp hours were reset, so start over
+    // No saved total, or the CA's amp hours were reset, so start over. Any amp hours
+    // the CA already counted are estimated at the current voltage
     wattHrsTotal = ampHrs * voltage;
   }
   else
   {
-    // Average with the last voltage, or use this one if the car just started
+    // Average with the last voltage, or use the current if the car just started
     float avgVoltage = isnan(lastVoltage) ? voltage : (voltage + lastVoltage) / 2;
     wattHrsTotal += (ampHrs - lastAmpHrs) * avgVoltage;
   }
@@ -449,7 +451,7 @@ void updateEnergy()
 
 void resetBatteryWindow()
 {
-  battCount = 0;
+  battSampleCount = 0;
   battSumI = battSumV = battSumII = battSumVV = battSumIV = 0;
   battWindowStart = millis();
 }
@@ -464,9 +466,11 @@ void updateBatteryEstimate()
   // Use a linear regression of the relationship between voltage and current
   // over the window to estimate resistance and sagging voltage
   // The slope of the line is -resistance, and the point at 0 current is the resting voltage
+  // Only running sums are kept, so the window doesn't need to store every sample
+  // (voltage at or below 5 V means the CA isn't reading the pack, so it's skipped)
   if (!isnan(current) && !isnan(voltage) && voltage > 5)
   {
-    battCount++;
+    battSampleCount++;
     battSumI += current;
     battSumV += voltage;
     battSumII += current * current;
@@ -477,16 +481,24 @@ void updateBatteryEstimate()
   if (millis() - battWindowStart < battWindow)
     return;
 
-  if (battCount >= battMinSamples)
+  if (battSampleCount >= battMinSamples)
   {
-    double meanI = battSumI / battCount;
-    double meanV = battSumV / battCount;
-    double sii = battSumII - battCount * meanI * meanI;
-    double svv = battSumVV - battCount * meanV * meanV;
-    double siv = battSumIV - battCount * meanI * meanV;
+    double meanI = battSumI / battSampleCount;
+    double meanV = battSumV / battSampleCount;
 
-    if (sqrt(sii / battCount) >= battMinCurrentStd && svv > 0 && siv * siv / (sii * svv) >= battMinR2)
+    // Sums of squared differences from the means, rearranged so they can be found from
+    // the running sums: sii = Σ(I - meanI)², svv = Σ(V - meanV)², siv = Σ(I - meanI)(V - meanV)
+    double sii = battSumII - battSampleCount * meanI * meanI;
+    double svv = battSumVV - battSampleCount * meanV * meanV;
+    double siv = battSumIV - battSampleCount * meanI * meanV;
+
+    double currentStd = sqrt(sii / battSampleCount);
+    bool enoughSpread = currentStd >= battMinCurrentStd && svv > 0;
+
+    // R² (0 to 1) is how much of the voltage change is explained by the current
+    if (enoughSpread && siv * siv / (sii * svv) >= battMinR2)
     {
+      // Least squares line: V = restVoltage + slope * I
       double slope = siv / sii;
       carData.restVoltage = meanV - slope * meanI;
       carData.resistance = -slope;
@@ -514,14 +526,17 @@ void initADCs()
 }
 
 // Convert a raw ADC reading of a thermistor voltage divider into degrees C
+// The thermistor is on the high side of the divider and seriesResistor is on the low side
 // This assumes the divider is powered by the ADC's full scale voltage (4.096v) // TODO: Fix this
 float thermistor(float rawReading)
 {
-  if (rawReading <= 0)
+  // At either end of the range the resistance is 0 or infinite (shorted or unplugged)
+  if (rawReading <= 0 || rawReading >= adcMaxReading)
   {
     return NAN;
   }
 
+  // Solve the voltage divider for the thermistor's resistance
   float resistance = seriesResistor * (adcMaxReading / rawReading - 1);
 
   // Steinhart-Hart equation gives the temperature in Kelvin
@@ -536,8 +551,9 @@ void getAnalog()
   // Throttle and brake
   // The ADC goes from 0 to 32767, map values are changed to fit the sensor range
   // The output is 0 to 1000 (the brake sensor reads backwards, so it's flipped)
-  carData.throttle = map(adc2.readRawCH(0), 0, 21298, 0, 1000);
-  carData.brake = map(adc2.readRawCH(1), 420, 2600, 1000, 0);
+  // map() doesn't limit its output, so readings past the calibration points are clamped
+  carData.throttle = constrain(map(adc2.readRawCH(0), 0, 21298, 0, 1000), 0, 1000);
+  carData.brake = constrain(map(adc2.readRawCH(1), 420, 2600, 1000, 0), 0, 1000);
 
   // Temperatures
   carData.motorTemp = thermistor(adc2.readRawCH(2));

@@ -197,7 +197,8 @@ function drawMap(carId) {
   if (!canvas || !canvas.clientWidth) return;
   const car = carState(carId);
 
-  const ratio = window.devicePixelRatio || 1; // || is like the ?? opearator, but it throws out 0
+  // Draw at the screen's real pixel density so lines stay sharp
+  const ratio = window.devicePixelRatio || 1; // || is like the ?? operator, but it also throws out 0
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {

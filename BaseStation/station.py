@@ -120,8 +120,11 @@ def handle_line(line, con):
     if data["timestamp"] is not None:
         data["timestamp"] /= 1000
 
-    # Send the data to the dashboard
-    publish_telemetry(data)
+    # Send the data to the dashboard. If Redis is down, still save the data
+    try:
+        publish_telemetry(data)
+    except redis.RedisError as e:
+        print("Error publishing to Redis:", e)
 
     if data["timestamp"] is None:
         print("No timestamp for packet! Skipping database insertion!")

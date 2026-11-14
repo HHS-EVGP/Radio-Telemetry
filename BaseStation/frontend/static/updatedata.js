@@ -15,7 +15,7 @@ function updateDashboard(data, carId) {
   // Set the content of each element
   for (const [field, decimals] of Object.entries(NUMERIC_FIELDS)) {
     let value = toNum(data[field]);
-    if (field === "throttle" || field === "brake") value /= PEDAL_SCALE; //
+    if (field === "throttle" || field === "brake") value /= PEDAL_SCALE;
     if (TEMP_FIELDS.includes(field) && value < DISCONNECTED_TEMP) value = NaN;
     setNum(carId + field, value, decimals);
   }

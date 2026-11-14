@@ -1,5 +1,5 @@
 //// Race clock ////
-// Race time comes from the timing serer-sent events and is advanced locally between them
+// Race time comes from the timing server-sent events and is advanced locally between them
 const race = { status: "Not Started", seconds: null, startedAt: null, receivedAt: 0 };
 
 function raceActive() {
@@ -22,6 +22,7 @@ function newCarState() {
     lastReceived: null, // Last time we got a packet
     wh: null, // Wh used, from the car
     ampHrs: null,
+    distance: null, // Miles, from the car
     recent: [], // {t, wh, distance} for the last RECENT_SECONDS of race time
     batt: { voc: null, r: null, lowCount: 0 }, // Latest estimate from the car, and how many in a row were low
     laps: [], // Completed laps
@@ -69,8 +70,10 @@ function resetMetrics(startedAt) {
   const carIds = new Set([...Object.keys(cars), ...Object.keys(saved?.cars ?? {})]); // Merge the data seen live with loaded data
   for (const carId of carIds) {
     const car = carState(carId);
+    // Reset the saved parts of the car state to their starting values from newCarState.
+    // The live parts (latest packet, GPS trail, map mode) are kept
     const fresh = newCarState();
-    Object.assign(car, Object.fromEntries(SAVED_TEMPLATE.map((key) => [key, fresh[key]]))); // Assign the contents of car form newCarState
+    Object.assign(car, Object.fromEntries(SAVED_TEMPLATE.map((key) => [key, fresh[key]])));
     car.batt.lowCount = 0;
 
     const savedCar = saved?.startedAt === startedAt ? saved.cars?.[carId] : null;
@@ -97,16 +100,19 @@ function targetSpeed(power) {
   const b = WH_PER_MILE_INTERCEPT;
   return (-b + Math.sqrt(b * b + 4 * a * power)) / (2 * a);
 }
-function recentRates(car) {
 
+// Average power and speed over the recent history (needs at least 30 seconds of it)
+function recentRates(car) {
   const first = car.recent[0];
   const last = car.recent[car.recent.length - 1];
   if (!first || last.t - first.t < 30) return { power: null, speed: null };
   const hours = (last.t - first.t) / 3600;
-  const miles = last.distance - first.distance;
+  // Distance can be missing (null) in either point
+  const hasDistance = Number.isFinite(first.distance) && Number.isFinite(last.distance);
+  const miles = hasDistance ? last.distance - first.distance : NaN;
   return {
     power: (last.wh - first.wh) / hours,
-    speed: Number.isFinite(miles) && miles >= 0 ? miles / hours : null,
+    speed: miles >= 0 ? miles / hours : null,
   };
 }
 
@@ -189,7 +195,7 @@ function lapMiles(car) {
     .filter((lap) => lap.complete && lap.miles > 0)
     .slice(-LAP_LENGTH_LAPS)
     .map((lap) => lap.miles)
-    .sort((a, b) => a - b); // This is all one line!
+    .sort((a, b) => a - b); // Numeric sort, the default sort compares as text
   return miles.length ? miles[Math.floor(miles.length / 2)] : null; // Return the middle one
 }
 
@@ -209,10 +215,12 @@ function updateLaps(carId, laps) {
   if (laps === car.lapCount) return;
 
   if (laps === car.lapCount + 1) {
+    // Lap+: the normal case
     finishLap(car, t);
     car.lap = startLap(car, t, true);
   } else if (laps === car.lapCount - 1 && car.laps.length && car.laps.at(-1).number === car.lapCount) {
     // Lap- undoes the last lap mark, so join that lap back onto the current one
+    // (only if this page saw that lap finish, otherwise fall through to the else below)
     const undone = car.laps.pop();
     car.lap = {
       startT: undone.startT,
@@ -224,6 +232,7 @@ function updateLaps(carId, laps) {
       complete: undone.complete && car.lap.complete,
     };
   } else {
+    // The count jumped (missed events or several corrections), so the lap totals can't be trusted
     car.lap = startLap(car, t, false);
   }
 
@@ -256,7 +265,7 @@ function updateMetrics(carId, data) {
   }
 
   if (running && car.wh != null) {
-    car.recent.push({ t, wh: car.wh, distance });
+    car.recent.push({ t, wh: car.wh, distance: Number.isFinite(distance) ? distance : null });
     while (car.recent.length && car.recent[0].t < t - RECENT_SECONDS) car.recent.shift();
   }
 
@@ -340,7 +349,7 @@ function renderMetrics(carId) {
     else setPill(carId + "paceAdvice", `Room to push ${(-diff).toFixed(1)} mph`, "green");
   }
 
-  // Update the battery waring on the page
+  // Update the battery warning on the page
   const status = batteryStatus(car.batt);
   setText(carId + "battStatus", status.text);
   setTone(document.getElementById(carId + "battStatus"), TEXT_TONES, status.tone);

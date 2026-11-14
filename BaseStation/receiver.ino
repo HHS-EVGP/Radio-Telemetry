@@ -73,7 +73,7 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   if (isnan(carData.timestamp)) {
     doc["timestamp"] = nullptr;
   } else {
-    // llround ensures this conversin rounds up for accuracy if needed
+    // llround rounds to the nearest millisecond instead of always rounding down
     doc["timestamp"] = (uint64_t)llround(carData.timestamp * 1000);
   }
 
