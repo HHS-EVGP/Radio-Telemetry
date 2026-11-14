@@ -21,6 +21,10 @@ An ESP32-powered data board on the car collects data from various points, logs t
     - Current
     - Speed
     - Distance
+- Calculated using Ohm's Law
+    - Watt-hours
+    - Resting Voltage
+    - Internal Resistance
 - Adafruit Featherwing GPS (Mercator projection)
     - GPS fix
     - GPS X
