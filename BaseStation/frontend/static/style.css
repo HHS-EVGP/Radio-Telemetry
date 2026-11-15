@@ -983,16 +983,19 @@
 }
 @layer components {
   .serverwarn {
-    position: sticky;
-    top: 0px;
+    position: fixed;
+    inset-inline: 0px;
+    top: calc(var(--spacing) * 5);
     z-index: 50;
-    width: 100%;
+    margin-inline: auto;
+    width: fit-content;
+    border-radius: var(--radius-2xl);
     background-color: var(--color-red-600);
     padding-inline: calc(var(--spacing) * 4);
     padding-block: calc(var(--spacing) * 2);
     text-align: center;
-    font-size: var(--text-sm);
-    line-height: var(--tw-leading, var(--text-sm--line-height));
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
     --tw-font-weight: var(--font-weight-bold);
     font-weight: var(--font-weight-bold);
     color: var(--color-white);
