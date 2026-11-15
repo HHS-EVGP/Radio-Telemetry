@@ -192,6 +192,27 @@ function mapPoints(car) {
   return raceActive() && car.lap?.points.length ? car.lap.points : car.trail;
 }
 
+// Fit the points in the canvas with the same scale on both axes.
+// Returns converters between GPS meters and canvas pixels
+function fitMapView(points, width, height) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  const pad = 16;
+  const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1), (height - 2 * pad) / Math.max(maxY - minY, 1));
+  const offsetX = (width - (maxX - minX) * scale) / 2;
+  const offsetY = (height - (maxY - minY) * scale) / 2;
+  // GPS Y points north, the canvas Y points down
+  return {
+    width,
+    height,
+    toCanvas: (x, y) => [offsetX + (x - minX) * scale, height - offsetY - (y - minY) * scale],
+    toGps: (cx, cy) => [minX + (cx - offsetX) / scale, minY + (height - offsetY - cy) / scale],
+  };
+}
+
 function drawMap(carId) {
   const canvas = document.getElementById(carId + "map");
   if (!canvas || !canvas.clientWidth) return;
@@ -220,18 +241,15 @@ function drawMap(carId) {
     return;
   }
 
-  // Fit the track in the canvas with the same scale on both axes
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const [x, y] of all) {
-    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  // The auto lap line is part of the fit so it can't end up off the map.
+  // Hold the view still while the line is dragged, so the line stays under the pointer
+  const line = car.autoLap.enabled ? car.autoLap.line ?? [] : [];
+  if (!car.mapDrag || !car.mapView) car.mapView = fitMapView(all.concat(line), width, height);
+  const { toCanvas } = car.mapView;
+  if (car.autoLap.enabled && !car.autoLap.line) {
+    car.autoLap.line = defaultAutoLapLine(car.mapView);
+    if (autoLapSync) syncAutoLapLines(carId);
   }
-  const pad = 16;
-  const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1), (height - 2 * pad) / Math.max(maxY - minY, 1));
-  const offsetX = (width - (maxX - minX) * scale) / 2;
-  const offsetY = (height - (maxY - minY) * scale) / 2;
-  // GPS Y points north, the canvas Y points down
-  const toCanvas = (x, y) => [offsetX + (x - minX) * scale, height - offsetY - (y - minY) * scale];
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -258,6 +276,8 @@ function drawMap(carId) {
     ctx.lineTo(x2, y2);
     ctx.stroke();
   }
+
+  if (car.autoLap.enabled && car.autoLap.line) drawAutoLapLine(ctx, car.autoLap.line.map(([x, y]) => toCanvas(x, y)));
 
   if (car.mapMode !== "live") return;
 
@@ -288,4 +308,155 @@ function setMapMode(carId, mode) {
     button.setAttribute("aria-pressed", String(button.dataset.mapMode === mode));
   });
   drawMap(carId);
+}
+
+
+//// Auto lap line ////
+const LINE_HANDLE_RADIUS = 7; // px, the dots on the ends of the line
+const LINE_HIT_SLOP = 14; // px, how close a press has to be to grab the line or a handle
+const LINE_MIN_HALF = 5; // m, half the length of a new line at least, in case the map only has a few points
+
+// A new line starts in the middle of the map, which is usually the infield, so it can't mark a lap
+// until it's dragged onto the track
+function defaultAutoLapLine(view) {
+  const [cx, cy] = view.toGps(view.width / 2, view.height / 2);
+  const half = Math.max(view.toGps(view.width * 0.65, 0)[0] - cx, LINE_MIN_HALF);
+  return [[cx - half, cy], [cx + half, cy]];
+}
+
+// Drawn as a checkered line with a handle on each end. ends are canvas [x, y] points
+function drawAutoLapLine(ctx, ends) {
+  const [[x1, y1], [x2, y2]] = ends;
+  ctx.lineCap = "butt";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "white";
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.strokeStyle = "#0f172a";
+  ctx.setLineDash([6, 6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineCap = "round";
+
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "#0f172a";
+  ctx.lineWidth = 2;
+  for (const [x, y] of ends) {
+    ctx.beginPath();
+    ctx.arc(x, y, LINE_HANDLE_RADIUS, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+function distanceToSegment([px, py], [x1, y1], [x2, y2]) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const fraction = dx || dy ? clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1) : 0;
+  return Math.hypot(px - (x1 + fraction * dx), py - (y1 + fraction * dy));
+}
+
+// What part of the auto lap line is at a canvas point: 0 or 1 for an end, "line" for the middle, or null
+function autoLapLineHit(carId, point) {
+  const car = carState(carId);
+  if (!car.autoLap.enabled || !car.autoLap.line || !car.mapView) return null;
+  const ends = car.autoLap.line.map(([x, y]) => car.mapView.toCanvas(x, y));
+  for (const index of [0, 1]) {
+    if (Math.hypot(point[0] - ends[index][0], point[1] - ends[index][1]) <= LINE_HIT_SLOP) return index;
+  }
+  return distanceToSegment(point, ends[0], ends[1]) <= LINE_HIT_SLOP ? "line" : null;
+}
+
+// Drag the middle of the line to move it, or an end to resize and turn it
+function setupAutoLapDragging(carId) {
+  const canvas = document.getElementById(carId + "map");
+  if (!canvas) return;
+  const car = carState(carId);
+  // Pointer position in canvas pixels, kept inside the canvas so the line can't be lost off the edge
+  const canvasPoint = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return [clamp(event.clientX - rect.left, 0, rect.width), clamp(event.clientY - rect.top, 0, rect.height)];
+  };
+
+  canvas.addEventListener("pointerdown", (event) => {
+    const point = canvasPoint(event);
+    const hit = autoLapLineHit(carId, point);
+    if (hit == null) return;
+    event.preventDefault();
+    canvas.setPointerCapture(event.pointerId);
+    car.mapDrag = { hit, start: car.mapView.toGps(...point), line: car.autoLap.line.map((end) => [...end]) };
+    canvas.style.cursor = "grabbing";
+  });
+
+  canvas.addEventListener("pointermove", (event) => {
+    const point = canvasPoint(event);
+    const drag = car.mapDrag;
+    if (!drag) {
+      const hit = autoLapLineHit(carId, point);
+      canvas.style.cursor = hit === "line" ? "grab" : hit != null ? "move" : "";
+      return;
+    }
+    const [x, y] = car.mapView.toGps(...point);
+    if (drag.hit === "line") {
+      const dx = x - drag.start[0], dy = y - drag.start[1];
+      car.autoLap.line = drag.line.map(([lx, ly]) => [lx + dx, ly + dy]);
+    } else {
+      car.autoLap.line[drag.hit] = [x, y];
+    }
+    if (autoLapSync) {
+      syncAutoLapLines(carId);
+      drawAllMaps();
+    } else {
+      drawMap(carId);
+    }
+  });
+
+  const endDrag = () => {
+    if (!car.mapDrag) return;
+    car.mapDrag = null;
+    canvas.style.cursor = "";
+    saveAutoLap();
+    drawMap(carId);
+  };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  // On touch screens, only stop the page from scrolling when the touch grabs the line
+  canvas.addEventListener("touchstart", (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const touch = event.touches[0];
+    if (autoLapLineHit(carId, [touch.clientX - rect.left, touch.clientY - rect.top]) != null) event.preventDefault();
+  }, { passive: false });
+}
+
+// Turn auto lapping on or off for a car. The manual lap buttons stay visible but are disabled while it's on
+function setAutoLap(carId, enabled) {
+  const car = carState(carId);
+  car.autoLap.enabled = enabled;
+  if (enabled && autoLapSync) syncAutoLapLines(carId);
+  document.querySelectorAll(`[data-auto-lap="${carId}"]`).forEach((toggle) => { toggle.checked = enabled; });
+  document.querySelectorAll(`[data-lap-button="${carId}"]`).forEach((button) => { button.disabled = enabled; });
+  const lapControls = document.getElementById(carId + "lapControls");
+  if (lapControls) lapControls.title = enabled ? "Turn off automatic lapping to use the lap buttons" : "";
+  // The sync checkbox only shows next to a map whose line is showing
+  const syncRow = document.getElementById(carId + "autoLapSyncRow");
+  if (syncRow) syncRow.hidden = !enabled;
+  drawMap(carId);
+}
+
+// Turn line syncing on or off. carId is the car whose line the others jump to
+function setAutoLapSync(sync, carId) {
+  autoLapSync = sync;
+  document.querySelectorAll("[data-auto-lap-sync]").forEach((checkbox) => { checkbox.checked = sync; });
+  if (sync && carId) syncAutoLapLines(carId);
+  drawAllMaps();
+}
+
+function flashLapButton(carId) {
+  const button = document.getElementById(carId + "lapPlus");
+  if (!button) return;
+  button.classList.remove("lap-flash");
+  void button.offsetWidth; // Reading the layout restarts the animation if it's already flashing
+  button.classList.add("lap-flash");
 }

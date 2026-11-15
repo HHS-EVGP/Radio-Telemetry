@@ -129,6 +129,24 @@
     @apply bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white;
   }
 
+  /* A checkbox drawn as an on/off switch */
+  .switch {
+    @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-slate-700 dark:checked:bg-blue-600;
+  }
+
+  .switch::before {
+    @apply absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform content-[''];
+  }
+
+  .switch:checked::before {
+    @apply translate-x-4;
+  }
+
+  /* Flashes the Lap + button when the auto lap line marks a lap (shows even while the button is disabled) */
+  .lap-flash {
+    animation: lap-flash 0.35s ease-in-out 4;
+  }
+
   .text-good {
     @apply text-emerald-600 dark:text-emerald-400;
   }
@@ -151,5 +169,18 @@
 
   .bg-bad {
     @apply bg-red-500;
+  }
+}
+
+@keyframes lap-flash {
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 1;
+    background-color: var(--color-amber-400);
+    color: var(--color-slate-900);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-amber-400) 50%, transparent);
   }
 }

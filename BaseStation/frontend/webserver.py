@@ -27,6 +27,7 @@ RACEINFO_PATH = os.path.join(REPO_ROOT, "raceInfo.pkl")
 CARS = ["blue_445", "red_111"]  # Also the database table names (keep in sync with station.py)
 TIMING_INTERVAL = 0.2  # Seconds between timing broadcasts
 TELEMETRY_FRESHNESS = 5  # Seconds a car's last timestamp is trusted for lap boundaries
+LAP_DEBOUNCE = 5  # Seconds after a lap+ that another lap+ is rejected (two dashboards auto lapping the same crossing)
 
 # gunicorn runs several workers, so race state lives in the pickle file (shared and
 # crash-safe), changes are serialized with a Redis lock, and only one worker
@@ -62,7 +63,8 @@ latest_telemetry = {}
 #   "paused_total": total seconds spent paused,
 #   "cars": {car_id: {
 #       "start_ts": car timestamp when the race started,
-#       "laps": [{"race_time": race time at the lap, "car_ts": car timestamp at the lap}]
+#       "laps": [{"race_time": race time at the lap, "car_ts": car timestamp at the lap}],
+#       "last_plus_at": server time of the last lap+, or None if a lap- came after it
 #   }}
 # }
 def load_state():
@@ -211,7 +213,7 @@ def change_state(action):
                 "ended_at": None,
                 "paused_at": None,
                 "paused_total": 0.0,
-                "cars": {car_id: {"start_ts": car_timestamp(car_id), "laps": []} for car_id in CARS},
+                "cars": {car_id: {"start_ts": car_timestamp(car_id), "laps": [], "last_plus_at": None} for car_id in CARS},
             }
 
         elif action == "stop":
@@ -242,6 +244,13 @@ def change_state(action):
             car_state = state["cars"][car_id]
 
             if delta == "plus":
+                # Server time, not race time, so laps still work while paused. A lap- in between
+                # clears last_plus_at, so a correction is never rejected
+                last_plus_at = car_state.get("last_plus_at")
+                if last_plus_at is not None and now - last_plus_at < LAP_DEBOUNCE:
+                    return state, f"Lap already marked less than {LAP_DEBOUNCE} seconds ago"
+                car_state["last_plus_at"] = now
+
                 # Never put a lap boundary before the previous one, which could
                 # happen if the car's clock jumps or we fall back to server time
                 prev_ts = car_state["laps"][-1]["car_ts"] if car_state["laps"] else car_state["start_ts"]
@@ -251,6 +260,7 @@ def change_state(action):
                 })
             elif car_state["laps"]:
                 car_state["laps"].pop()
+                car_state["last_plus_at"] = None
             else:
                 return state, "No laps to remove"
 
@@ -366,4 +376,4 @@ def dashboard():
 
 # Run the app for local testing
 if __name__ == '__main__':
-    app.run(threaded=True, debug=True, port=5000)
+    app.run(threaded=True, debug=True, host="0.0.0.0", port=5000)

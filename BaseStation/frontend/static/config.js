@@ -35,6 +35,8 @@ const TRAIL_POINTS = 150; // GPS points shown on the live map when no race is ru
 const CHART_LAPS = 15; // Laps shown in the lap energy chart
 const LAP_LENGTH_LAPS = 5; // Recent complete laps used to measure the lap length for the target lap time
 const STORAGE_KEY = "evgpRaceMetrics"; // key for client cache
+const AUTO_LAP_KEY = "evgpAutoLap"; // key for the saved auto lap toggles and lines. Keys arte seperate because data lives for different ammounts of time
+const AUTO_LAP_MIN_SECONDS = 5; // Race seconds after a lap mark before the auto lap line can mark another (stops GPS jitter on the line from double counting)
 
 // Numeric telemetry fields and their decimal places. Each one is shown in the element with id <carId><field>
 const NUMERIC_FIELDS = {
@@ -111,6 +113,13 @@ function formatLapTime(seconds) {
   const minutes = Math.floor(tenths / 600);
   const rest = tenths % 600;
   return `${minutes}:${String(Math.floor(rest / 10)).padStart(2, "0")}.${rest % 10}`;
+}
+
+// True if segment p1-p2 crosses segment q1-q2. Points are [x, y]
+function segmentsCross(p1, p2, q1, q2) {
+  // Which side of the line a-b point c is on: 1, -1, or 0 if it's on the line
+  const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  return side(p1, p2, q1) * side(p1, p2, q2) < 0 && side(q1, q2, p1) * side(q1, q2, p2) < 0;
 }
 
 // Function for extracting values from the stylesheet, so that canvases can match the theme

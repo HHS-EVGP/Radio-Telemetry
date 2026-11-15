@@ -79,9 +79,10 @@
     {{ stat(car_id ~ "pitEnergy", "Proj. energy", "%") }}
   </div>
 
-  <div class="raceControls mt-3 grid grid-cols-2 gap-2 sm:mt-4" style="display: none;">
-    <button class="btn btn-primary py-3 text-base" onclick="changeLap('{{ car_id }}', 'plus')">Lap +</button>
-    <button class="btn py-3 text-base" onclick="changeLap('{{ car_id }}', 'minus')">Lap −</button>
+  {# Disabled buttons ignore the pointer, so the tooltip for them goes on this container #}
+  <div id="{{ car_id }}lapControls" class="raceControls mt-3 grid grid-cols-2 gap-2 sm:mt-4" style="display: none;">
+    <button id="{{ car_id }}lapPlus" data-lap-button="{{ car_id }}" class="btn btn-primary py-3 text-base" onclick="changeLap('{{ car_id }}', 'plus')">Lap +</button>
+    <button data-lap-button="{{ car_id }}" class="btn py-3 text-base" onclick="changeLap('{{ car_id }}', 'minus')">Lap −</button>
   </div>
 </section>
 {% endmacro %}
@@ -213,7 +214,18 @@
         <button type="button" data-car="{{ car_id }}" data-map-mode="best" aria-pressed="false">Best lap</button>
       </span>
     </h3>
-    <canvas id="{{ car_id }}map" class="aspect-4/3 w-full rounded-xl bg-slate-50 dark:bg-slate-950/60"></canvas>
+    <div class="relative">
+      <canvas id="{{ car_id }}map" class="aspect-4/3 w-full rounded-xl bg-slate-100 dark:bg-slate-950/60"></canvas>
+      <!-- Automatic lapping, only for authenticated clients. The line is drawn and dragged by visuals.js -->
+      <div class="raceControls absolute bottom-2 left-2 flex items-center gap-3 rounded-lg bg-white/85 px-2 py-1.5 text-xs shadow-sm backdrop-blur dark:bg-slate-900/85" style="display: none;">
+        <label class="flex cursor-pointer items-center gap-2 font-medium" title="Drag the line across the track. Drag its ends to resize it.">
+          <input type="checkbox" role="switch" class="switch" data-auto-lap="{{ car_id }}">Automatic lapping
+        </label>
+        <label id="{{ car_id }}autoLapSyncRow" class="flex cursor-pointer items-center gap-2" title="Keep both cars' lap lines at the same spot" hidden>
+          <input type="checkbox" class="size-3.5 accent-blue-600" data-auto-lap-sync="{{ car_id }}">Sync lines
+        </label>
+      </div>
+    </div>
     <!-- Current color scale, drawn by visuals.js -->
     <div class="mt-2 flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
       <span>−25 A</span>

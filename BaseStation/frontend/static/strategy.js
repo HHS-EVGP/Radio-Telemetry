@@ -31,6 +31,11 @@ function newCarState() {
     track: [], // [x, y] GPS points for the map outline
     trail: [], // [x, y, current] most recent GPS points
     mapMode: "live",
+    mapView: null, // How the map fits GPS meters to canvas pixels, from drawMap
+    mapDrag: null, // The auto lap line drag in progress
+    // line is two [x, y] GPS points, checked is the last trail point tested against it,
+    // and triggeredAt is the race time of the last lap this page marked from the line
+    autoLap: { enabled: false, line: null, checked: null, triggeredAt: null },
   };
 }
 
@@ -75,6 +80,7 @@ function resetMetrics(startedAt) {
     const fresh = newCarState();
     Object.assign(car, Object.fromEntries(SAVED_TEMPLATE.map((key) => [key, fresh[key]])));
     car.batt.lowCount = 0;
+    car.autoLap.triggeredAt = null;
 
     const savedCar = saved?.startedAt === startedAt ? saved.cars?.[carId] : null;
     if (savedCar) {
@@ -239,6 +245,65 @@ function updateLaps(carId, laps) {
   car.lapCount = laps;
   drawLapChart(carId);
   saveMetrics();
+}
+
+// When true, every car's auto lap line is kept at the same spot on the track
+let autoLapSync = false;
+
+// Copy one car's auto lap line to every other car. If it doesn't have a line yet, it takes another car's
+function syncAutoLapLines(carId) {
+  const line = carState(carId).autoLap.line ?? Object.values(cars).find((car) => car.autoLap.line)?.autoLap.line;
+  if (!line) return;
+  for (const car of Object.values(cars)) {
+    car.autoLap.line = line.map((end) => [...end]);
+  }
+}
+
+// The auto lap toggles and lines are saved separately from the race metrics, so they carry over between races
+function saveAutoLap() {
+  const saved = { sync: autoLapSync, cars: {} };
+  for (const [carId, car] of Object.entries(cars)) {
+    saved.cars[carId] = { enabled: car.autoLap.enabled, line: car.autoLap.line };
+  }
+  try {
+    localStorage.setItem(AUTO_LAP_KEY, JSON.stringify(saved));
+  } catch (err) {
+    console.error("Error saving auto lap settings:", err);
+  }
+}
+
+function loadAutoLap() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(AUTO_LAP_KEY));
+  } catch (err) {
+    saved = null;
+  }
+  autoLapSync = saved?.sync === true;
+  for (const [carId, car] of Object.entries(cars)) {
+    car.autoLap.enabled = saved?.cars?.[carId]?.enabled === true;
+    car.autoLap.line = saved?.cars?.[carId]?.line ?? car.autoLap.line;
+  }
+}
+
+// True when the car's newest GPS step crossed its auto lap line and a lap should be marked
+function crossedAutoLapLine(carId) {
+  const car = carState(carId);
+  const auto = car.autoLap;
+  const to = car.trail.at(-1);
+  const from = car.trail.at(-2);
+  // Only test each GPS point once, packets without a fix don't add one
+  if (!to || to === auto.checked) return false;
+  auto.checked = to;
+
+  const t = raceSecondsNow();
+  if (!auto.enabled || !auto.line || !from || race.status !== "Running" || t == null) return false;
+  if (!segmentsCross(from, to, auto.line[0], auto.line[1])) return false;
+
+  const lastMark = Math.max(car.lap?.startT ?? 0, auto.triggeredAt ?? 0);
+  if (t - lastMark < AUTO_LAP_MIN_SECONDS) return false;
+  auto.triggeredAt = t;
+  return true;
 }
 
 function updateMetrics(carId, data) {

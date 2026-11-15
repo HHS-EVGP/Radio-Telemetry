@@ -32,6 +32,7 @@ function updateDashboard(data, carId) {
 
   updateGauges(carId, data);
   updateMetrics(carId, data);
+  if (crossedAutoLapLine(carId)) autoLap(carId);
   renderMetrics(carId);
   updateLiveStatus();
   drawMap(carId);
@@ -108,6 +109,11 @@ function showControls(authed) {
   });
   const authForm = document.getElementById("authControls");
   if (authForm) authForm.style.display = authed ? "none" : "";
+
+  // Auto lapping marks laps, so it only runs on an authenticated page
+  if (authed) loadAutoLap();
+  setAutoLapSync(autoLapSync);
+  Object.keys(cars).forEach((carId) => setAutoLap(carId, authed && carState(carId).autoLap.enabled));
 }
 
 async function checkAuth() {
@@ -135,15 +141,16 @@ async function authenticate(code) {
 
 function playLapSound() {
   const lapSound = document.getElementById("lapSound");
-  if (lapSound) {
+  // Let the sound finish rather than cutting it off or overlapping it
+  if (lapSound && (lapSound.paused || lapSound.ended)) {
     lapSound.currentTime = 0;
     lapSound.play().catch((err) => console.error("Error playing lap sound:", err));
   }
 }
 
 // Send a timing command to the server. Every client gets the result through SSE
-// Returns true if the command succeeded
-async function sendCommand(url) {
+// Returns true if the command succeeded. quiet skips the alert when the server rejects the command
+async function sendCommand(url, quiet = false) {
   try {
     const response = await fetch(url, { method: "POST" });
     // Server errors (500) return HTML instead of JSON, so the .catch wraps it in a json
@@ -153,7 +160,8 @@ async function sendCommand(url) {
       return false;
     }
     if (!response.ok) {
-      alert(data.error ?? "Command failed");
+      if (quiet) console.warn(data.error ?? "Command failed");
+      else alert(data.error ?? "Command failed");
       return false;
     }
     updateTiming(data);
@@ -177,10 +185,16 @@ function racePauseResume() {
   sendCommand(raceStatus === "Paused" ? "/race/resume" : "/race/pause");
 }
 
-async function changeLap(carId, delta) {
-  if ((await sendCommand(`/laps/${carId}/${delta}`)) && delta === "plus") {
-    playLapSound();
-  }
+// Returns true if the lap change succeeded
+async function changeLap(carId, delta, quiet = false) {
+  const ok = await sendCommand(`/laps/${carId}/${delta}`, quiet);
+  if (ok && delta === "plus") playLapSound();
+  return ok;
+}
+
+// The car crossed its auto lap line. Quiet, because another dashboard may have marked the same crossing
+async function autoLap(carId) {
+  if (await changeLap(carId, "plus", true)) flashLapButton(carId);
 }
 
 
@@ -252,6 +266,20 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-map-mode]").forEach((button) => {
     button.addEventListener("click", () => setMapMode(button.dataset.car, button.dataset.mapMode));
   });
+
+  document.querySelectorAll("[data-auto-lap]").forEach((toggle) => {
+    toggle.addEventListener("change", () => {
+      setAutoLap(toggle.dataset.autoLap, toggle.checked);
+      saveAutoLap();
+    });
+  });
+  document.querySelectorAll("[data-auto-lap-sync]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      setAutoLapSync(checkbox.checked, checkbox.dataset.autoLapSync);
+      saveAutoLap();
+    });
+  });
+  Object.keys(cars).forEach(setupAutoLapDragging);
 
   window.addEventListener("resize", drawAllMaps);
   setInterval(updateLiveStatus, 1000);
