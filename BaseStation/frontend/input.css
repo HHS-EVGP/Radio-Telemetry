@@ -129,9 +129,9 @@
     @apply bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white;
   }
 
-  /* A checkbox drawn as an on/off switch */
+  /* A checkbox drawn as an on/off switch, in the car's color */
   .switch {
-    @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-slate-700 dark:checked:bg-blue-600;
+    @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors checked:bg-(--car) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--car) dark:bg-slate-700 dark:checked:bg-(--car);
   }
 
   .switch::before {

@@ -762,8 +762,8 @@
     --tw-numeric-spacing: tabular-nums;
     font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,);
   }
-  .accent-blue-600 {
-    accent-color: var(--color-blue-600);
+  .accent-\(--car\) {
+    accent-color: var(--car);
   }
   .shadow-sm {
     --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
@@ -1310,7 +1310,7 @@
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
     &:checked {
-      background-color: var(--color-blue-600);
+      background-color: var(--car);
     }
     &:focus-visible {
       outline-style: var(--tw-outline-style);
@@ -1320,14 +1320,14 @@
       outline-offset: 2px;
     }
     &:focus-visible {
-      outline-color: var(--color-blue-600);
+      outline-color: var(--car);
     }
     &:where(.dark, .dark *) {
       background-color: var(--color-slate-700);
     }
     &:where(.dark, .dark *) {
       &:checked {
-        background-color: var(--color-blue-600);
+        background-color: var(--car);
       }
     }
   }
